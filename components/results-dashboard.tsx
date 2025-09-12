@@ -140,9 +140,9 @@ export function ResultsDashboard({ results, onPrevious }: ResultsDashboardProps)
             <TabsContent value="soc" className="space-y-4">
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData}>
+                  <AreaChart data={chartData} margin={{ bottom: 20 , left: 10}}>
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="time" label={{ value: "Time (min)", position: "insideBottom", offset: -10 }} />
+                    <XAxis dataKey="time" label={{ value: "Time (min)", position: "insideBottom", offset: -5, dy:10 }} />
                     <YAxis label={{ value: "SOC (%)", angle: -90, position: "insideLeft" }} />
                     <Tooltip
                       formatter={(value: any) => [`${value.toFixed(1)}%`, "SOC"]}
@@ -163,9 +163,9 @@ export function ResultsDashboard({ results, onPrevious }: ResultsDashboardProps)
             <TabsContent value="voltage" className="space-y-4">
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData}>
+                  <LineChart data={chartData}margin={{ bottom: 20 , left: 10}}>
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="time" label={{ value: "Time (min)", position: "insideBottom", offset: -10 }} />
+                    <XAxis dataKey="time" label={{ value: "Time (min)", position: "insideBottom", offset: -5, dy:10  }} />
                     <YAxis label={{ value: "Voltage (V)", angle: -90, position: "insideLeft" }} />
                     <Tooltip
                       formatter={(value: any) => [`${value.toFixed(1)}V`, "Voltage"]}
@@ -180,9 +180,9 @@ export function ResultsDashboard({ results, onPrevious }: ResultsDashboardProps)
             <TabsContent value="current" className="space-y-4">
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData}>
+                  <LineChart data={chartData}margin={{ bottom: 20 , left: 10}}>
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="time" label={{ value: "Time (min)", position: "insideBottom", offset: -10 }} />
+                    <XAxis dataKey="time" label={{ value: "Time (min)", position: "insideBottom", offset: -5, dy:10  }} />
                     <YAxis label={{ value: "Current (A)", angle: -90, position: "insideLeft" }} />
                     <Tooltip
                       formatter={(value: any) => [`${value.toFixed(1)}A`, "Current"]}
@@ -197,9 +197,9 @@ export function ResultsDashboard({ results, onPrevious }: ResultsDashboardProps)
             <TabsContent value="temperature" className="space-y-4">
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData}>
+                  <LineChart data={chartData}margin={{ bottom: 20 , left: 10}}>
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="time" label={{ value: "Time (min)", position: "insideBottom", offset: -10 }} />
+                    <XAxis dataKey="time" label={{ value: "Time (min)", position: "insideBottom", offset: -5, dy:10 }} />
                     <YAxis label={{ value: "Temperature (°C)", angle: -90, position: "insideLeft" }} />
                     <Tooltip
                       formatter={(value: any) => [`${value.toFixed(1)}°C`, "Temperature"]}
@@ -208,7 +208,7 @@ export function ResultsDashboard({ results, onPrevious }: ResultsDashboardProps)
                     <Line
                       type="monotone"
                       dataKey="temperature"
-                      stroke="var(--chart-4)"
+                      stroke="var(--chart-4))"
                       strokeWidth={2}
                       dot={false}
                     />
@@ -220,9 +220,9 @@ export function ResultsDashboard({ results, onPrevious }: ResultsDashboardProps)
             <TabsContent value="power" className="space-y-4">
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData}>
+                  <AreaChart data={chartData}margin={{ bottom: 20 , left: 10}}>
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="time" label={{ value: "Time (min)", position: "insideBottom", offset: -10 }} />
+                    <XAxis dataKey="time" label={{ value: "Time (min)", position: "insideBottom", offset: -5, dy:10  }} />
                     <YAxis label={{ value: "Power (kW)", angle: -90, position: "insideLeft" }} />
                     <Tooltip
                       formatter={(value: any) => [`${value.toFixed(2)}kW`, "Power"]}

@@ -287,7 +287,7 @@ export function DriveCycleBuilder({ onConfigChange, onNext, onPrevious }: DriveC
                     formatter={(value: any) => [`${value.toFixed(1)}A`, "Current"]}
                     labelFormatter={(value: any) => `Time: ${value.toFixed(1)}s`}
                   />
-                  <Line type="monotone" dataKey="current" stroke="#8884d8" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="current" stroke="var(--accent)" strokeWidth={2} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
