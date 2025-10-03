@@ -1,0 +1,67 @@
+import re
+
+def init_classify_cells(cells, N_rows, N_cols):
+    """
+    Classifies each cell as 'corner', 'edge', or 'center' and identifies adjacent cells.
+
+    Args:
+        cells (list of dict): List of cell dictionaries with at least 'label'.
+        N_rows (int): Number of cell rows in the module.
+        N_cols (int): Number of cell columns in the module.
+
+    Returns:
+        list of dict: Updated cells with 'type' and neighbor info.
+    """
+    for cell in cells:
+        # Extract row and column index from label (e.g., 'R2C3')
+        match = re.match(r'R(\d+)C(\d+)', cell['label'])
+        if not match:
+            raise ValueError(f"Invalid cell label format: {cell['label']}")
+        row = int(match.group(1))
+        col = int(match.group(2))
+
+        # Classify cell type
+        if (row in [1, N_rows]) and (col in [1, N_cols]):
+            cell['type'] = 'corner'
+        elif row in [1, N_rows] or col in [1, N_cols]:
+            cell['type'] = 'edge'
+        else:
+            cell['type'] = 'center'
+
+        # Initialize adjacency lists
+        row_adjacent = []
+        col_adjacent = []
+        diagonal_adjacent = []
+
+        # Row-adjacent (left/right)
+        if col > 1:
+            left_neighbor = (row - 1) * N_cols + (col - 2)
+            row_adjacent.append(left_neighbor)
+        if col < N_cols:
+            right_neighbor = (row - 1) * N_cols + col
+            row_adjacent.append(right_neighbor)
+
+        # Column-adjacent (top/bottom)
+        if row > 1:
+            top_neighbor = (row - 2) * N_cols + (col - 1)
+            col_adjacent.append(top_neighbor)
+        if row < N_rows:
+            bottom_neighbor = row * N_cols + (col - 1)
+            col_adjacent.append(bottom_neighbor)
+
+        # Diagonal neighbors
+        if row > 1 and col > 1:
+            diagonal_adjacent.append((row - 2) * N_cols + (col - 2))  # top-left
+        if row > 1 and col < N_cols:
+            diagonal_adjacent.append((row - 2) * N_cols + col)  # top-right
+        if row < N_rows and col > 1:
+            diagonal_adjacent.append(row * N_cols + (col - 2))  # bottom-left
+        if row < N_rows and col < N_cols:
+            diagonal_adjacent.append(row * N_cols + col)  # bottom-right
+
+        # Save in cell dictionary
+        cell['row_adjacent'] = row_adjacent
+        cell['col_adjacent'] = col_adjacent
+        cell['diagonal_adjacent'] = diagonal_adjacent
+
+    return cells

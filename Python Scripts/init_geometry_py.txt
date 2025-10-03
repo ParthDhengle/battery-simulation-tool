@@ -1,0 +1,66 @@
+import matplotlib.pyplot as plt
+
+def init_geometry(N_cells, cell_radius, cell_height, N_rows, N_cols, row_distance, col_distance, grid_type='rectangular'):
+    """
+    Initializes the geometric positions of cells in the module based on input parameters.
+    Adds labels to identify cells based on row and column and includes cell numbers.
+    Visualizes the geometry of the module.
+
+    Returns:
+        cells (list of dict): Each dict contains cell properties like position, radius, height, label, number.
+    """
+
+    if N_cells != N_rows * N_cols:
+        raise ValueError("The number of cells must equal N_rows * N_cols")
+
+    cells = []
+    cell_index = 1
+
+    for i in range(N_rows):
+        for j in range(N_cols):
+            if grid_type == 'rectangular':
+                x_pos = j * col_distance
+                y_pos = i * row_distance
+
+                label = f'R{i+1}C{j+1}'  # MATLAB is 1-indexed
+                cell_data = {
+                    'position': (x_pos, y_pos),
+                    'radius': cell_radius,
+                    'height': cell_height,
+                    'label': label,
+                    'number': cell_index
+                }
+
+                cells.append(cell_data)
+                cell_index += 1
+            else:
+                raise ValueError("Currently, only the rectangular grid is supported.")
+
+    # Visualize geometry
+    _plot_geometry(cells)
+
+    return cells
+
+
+def _plot_geometry(cells):
+    """Plots the geometry of the module based on cell positions."""
+    fig, ax = plt.subplots()
+    ax.set_aspect('equal')
+    ax.set_xlabel('X Position (m)')
+    ax.set_ylabel('Y Position (m)')
+    ax.set_title('Module Geometry Visualization')
+
+    for cell in cells:
+        x, y = cell['position']
+        radius = cell['radius']
+        label = cell['label']
+        number = cell['number']
+
+        circle = plt.Circle((x, y), radius, edgecolor='blue', facecolor='none')
+        ax.add_patch(circle)
+
+        annotation_text = f"{label}\nCell {number}"
+        ax.text(x, y, annotation_text, ha='center', va='center', fontsize=10)
+
+    plt.grid(True)
+    plt.show()

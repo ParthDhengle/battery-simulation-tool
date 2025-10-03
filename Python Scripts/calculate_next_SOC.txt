@@ -1,0 +1,29 @@
+def calculate_next_soc(I_current, dt, capacity, current_SOC, coulombic_efficiency, SOH):
+    """
+    Calculate next time-step SOC based on current, time, and battery parameters.
+
+    Args:
+        I_current (float): Current at this time step (A). Positive = discharge, Negative = charge.
+        dt (float): Time step (s).
+        capacity (float): Nominal capacity (Ah).
+        current_SOC (float): Current state of charge (0 to 1).
+        coulombic_efficiency (float): Efficiency for charging (0 to 1).
+        SOH (float): State of Health (0 to 1).
+
+    Returns:
+        float: SOC at next time step (bounded between 0 and 1).
+    """
+
+    # Adjust for aging (capacity fade)
+    effective_capacity_As = capacity * SOH * 3600  # Convert Ah to As (Ampere-seconds)
+
+    # Charging (I < 0) uses coulombic efficiency
+    if I_current < 0:
+        next_SOC = current_SOC - (I_current * dt / effective_capacity_As) * coulombic_efficiency
+    else:  # Discharging
+        next_SOC = current_SOC - (I_current * dt / effective_capacity_As)
+
+    # Clamp SOC between 0 and 1
+    next_SOC = max(0.0, min(1.0, next_SOC))
+
+    return next_SOC

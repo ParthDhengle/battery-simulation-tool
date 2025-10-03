@@ -1,0 +1,144 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+from input_loader.geometry import init_geometry
+from input_loader.initial_conditions import init_initial_cell_conditions
+from input_loader.classify_cells import init_classify_cells
+
+def setup_user_inputs():
+    # -------------------------
+    # Geometry and Module Setup
+    # -------------------------
+    N_cells = 9
+    cell_radius = 0.0105  # meters
+    cell_height = 0.07    # meters
+    N_rows = 3
+    N_cols = 3
+    row_distance = 0.023
+    col_distance = 0.023
+    grid_type = 'rectangular'
+
+    capacity = 5  # Ah
+    columbic_efficiency = 1.0
+    connection_type = 'row_series_column_parallel'
+    R_p = 0.001
+    R_s = 0.001
+
+    cell_voltage_upper_limit = 4.5
+    cell_voltage_lower_limit = np.nan
+    module_voltage_upper_limit = 60
+    module_voltage_lower_limit = np.nan
+
+    m_cell = 0.06725       # kg
+    m_jellyroll = 0.05708  # kg
+
+    # -----------------------
+    # Initialize cell geometry
+    # -----------------------
+    cells = init_geometry(N_cells, cell_radius, cell_height, N_rows, N_cols,
+                          row_distance, col_distance, grid_type)
+
+    # ----------------------
+    # Classify cells (edge, corner, center)
+    # ----------------------
+    cells = init_classify_cells(cells, N_rows, N_cols)
+
+    # -----------------------
+    # Initial Conditions
+    # -----------------------
+    initial_temperature = 300  # K
+    initial_SOC = 1.0
+    initial_SOH = 1.0
+    initial_DCIR_AgingFactor = 1.0
+
+    # Varying values (cell indices start at 1 like MATLAB)
+    varying_cells = [1]
+    varying_temps = [300]
+    varying_SOCs = [1.0]
+    varying_SOHs = [0.95]
+    varying_DCIRs = [1.04]
+
+    cells = init_initial_cell_conditions(
+        cells,
+        initial_temperature,
+        initial_SOC,
+        initial_SOH,
+        initial_DCIR_AgingFactor,
+        varying_cells,
+        varying_temps,
+        varying_SOCs,
+        varying_SOHs,
+        varying_DCIRs
+    )
+
+    # -----------------------
+    # Load RC Parameter Dataset (placeholders)
+    # -----------------------
+    BatteryData_SOH1 = None  # load from .mat or .csv later
+    BatteryData_SOH2 = None
+    BatteryData_SOH3 = None
+
+    # -----------------------
+    # Load and repeat drive cycle
+    # -----------------------
+    drive_cycle_file = 'Drive Cycle/drive_cycle_generac.xlsx'  # adjust path as needed
+    drive_cycle = pd.read_excel(drive_cycle_file)
+
+    time = drive_cycle.iloc[:, 0].to_numpy()
+    V_term_test = drive_cycle.iloc[:, 1].to_numpy()
+    I_module = drive_cycle.iloc[:, 2].to_numpy()
+
+    num_repeats = 1
+    cycle_duration = time[-1]
+
+    repeated_time = []
+    repeated_current = []
+
+    for i in range(num_repeats):
+        repeated_time.extend(time + i * cycle_duration)
+        repeated_current.extend(I_module)
+
+    time = np.array(repeated_time)
+    I_module = np.array(repeated_current)
+    time_steps = len(time)
+
+    # -----------------------
+    # Plot Drive Cycle
+    # -----------------------
+    plt.figure()
+    plt.plot(time, I_module)
+    plt.xlabel('Time (seconds)')
+    plt.ylabel('Module Current (A)')
+    plt.title('Drive Cycle Current')
+    plt.grid(True)
+    plt.show()
+
+    # -----------------------
+    # Return all data
+    # -----------------------
+    return {
+        'cells': cells,
+        'capacity': capacity,
+        'columbic_efficiency': columbic_efficiency,
+        'connection_type': connection_type,
+        'R_p': R_p,
+        'R_s': R_s,
+        'voltage_limits': {
+            'cell_upper': cell_voltage_upper_limit,
+            'cell_lower': cell_voltage_lower_limit,
+            'module_upper': module_voltage_upper_limit,
+            'module_lower': module_voltage_lower_limit
+        },
+        'masses': {
+            'cell': m_cell,
+            'jellyroll': m_jellyroll
+        },
+        'time': time,
+        'I_module': I_module,
+        'V_term_test': V_term_test,
+        'time_steps': time_steps,
+        'BatteryData_SOH1': BatteryData_SOH1,
+        'BatteryData_SOH2': BatteryData_SOH2,
+        'BatteryData_SOH3': BatteryData_SOH3
+    }

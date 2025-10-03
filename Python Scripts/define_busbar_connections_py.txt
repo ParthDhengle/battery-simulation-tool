@@ -1,0 +1,53 @@
+def define_busbar_connections(cells, N_rows, N_cols, connection_type):
+    """
+    Defines series and parallel busbar connections for each cell.
+
+    Args:
+        cells (list of dict): Cell data (already includes label, position, etc.)
+        N_rows (int): Number of rows in the module.
+        N_cols (int): Number of columns in the module.
+        connection_type (str): Either 'row_parallel_column_series' or 'row_series_column_parallel'.
+
+    Returns:
+        cells (list of dict): Updated with 'parallel_group' and 'next_series'.
+        parallel_groups (list of int): Unique parallel group IDs.
+    """
+
+    parallel_groups = []
+
+    for i in range(N_rows):
+        for j in range(N_cols):
+            # Cell index in list (0-based)
+            cell_index = i * N_cols + j
+            cell = cells[cell_index]
+
+            if connection_type == 'row_parallel_column_series':
+                # Group by row
+                cell['parallel_group'] = i + 1  # to match MATLAB 1-based group
+                if i < N_rows - 1:
+                    cell['next_series'] = (i + 1) * N_cols  # index of next row’s first cell
+                else:
+                    cell['next_series'] = None
+
+            elif connection_type == 'row_series_column_parallel':
+                # Group by column
+                cell['parallel_group'] = j + 1
+                if j < N_cols - 1:
+                    cell['next_series'] = cell_index + 1
+                else:
+                    cell['next_series'] = None
+
+            else:
+                raise ValueError("Unsupported connection type. Use 'row_parallel_column_series' or 'row_series_column_parallel'.")
+
+            # Save back to list
+            cells[cell_index] = cell
+
+            # Track parallel group
+            if cell['parallel_group'] not in parallel_groups:
+                parallel_groups.append(cell['parallel_group'])
+
+    # Sort for consistency
+    parallel_groups = sorted(parallel_groups)
+
+    return cells, parallel_groups

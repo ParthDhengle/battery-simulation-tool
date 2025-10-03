@@ -1,0 +1,65 @@
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+import matplotlib.cm as cm
+import numpy as np
+
+def visualize_busbar_connections(cells, N_rows, N_cols):
+    """
+    Visualize busbar connections: parallel groups (color-coded) and series connections (arrows).
+
+    Args:
+        cells (list of dict): Cells with 'position', 'parallel_group', 'next_series', 'radius', 'number'.
+        N_rows (int): Number of rows (for layout clarity).
+        N_cols (int): Number of columns.
+    """
+
+    fig, ax = plt.subplots()
+    ax.set_aspect('equal')
+    ax.set_xlabel('X Position (m)')
+    ax.set_ylabel('Y Position (m)')
+    ax.set_title('Battery Module Connections with Parallel Group Legend')
+
+    # Determine number of parallel groups and assign colors
+    parallel_groups = sorted(set(cell['parallel_group'] for cell in cells))
+    max_group = max(parallel_groups)
+    colormap = cm.get_cmap('tab10', max_group)
+
+    plotted_groups = set()
+    legend_handles = []
+    legend_labels = []
+
+    for i, cell in enumerate(cells):
+        x, y = cell['position']
+        r = cell['radius']
+        group_id = cell['parallel_group']
+        color = colormap(group_id - 1)  # colormap is 0-indexed
+        number = cell['number']
+        next_series = cell.get('next_series')
+
+        # Plot circle
+        circle = patches.Circle((x, y), r, edgecolor=color, facecolor='none', linewidth=1.5)
+        ax.add_patch(circle)
+
+        # Annotate
+        annotation = f'Cell {number}\nGroup {group_id}'
+        ax.text(x, y, annotation, ha='center', va='center', fontsize=8)
+
+        # Series arrow (if valid)
+        if next_series is not None and isinstance(next_series, int) and 0 <= next_series < len(cells):
+            next_x, next_y = cells[next_series]['position']
+            dx = next_x - x
+            dy = next_y - y
+            ax.arrow(x, y, dx, dy, head_width=0.002, length_includes_head=True,
+                     color='k', linewidth=1)
+
+        # Legend (only add once per group)
+        if group_id not in plotted_groups:
+            h = ax.plot(np.nan, np.nan, 'o', color=color, label=f'Parallel Group {group_id}', linewidth=1.5)[0]
+            legend_handles.append(h)
+            legend_labels.append(f'Parallel Group {group_id}')
+            plotted_groups.add(group_id)
+
+    # Add legend
+    ax.legend(handles=legend_handles, labels=legend_labels, title="Parallel Groups", loc='best')
+    plt.grid(True)
+    plt.show()
