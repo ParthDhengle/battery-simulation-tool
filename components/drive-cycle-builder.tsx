@@ -209,6 +209,7 @@ export function DriveCycleBuilder({ onConfigChange, onNext, onPrevious }: DriveC
         defaultDriveCycleId,
         startingSoc: Number.parseFloat(startingSoc),
       }
+      console.log('Generated drive cycle configuration:', config);
       onConfigChange(config)
       onNext()
     } else {
