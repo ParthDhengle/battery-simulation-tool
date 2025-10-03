@@ -2,52 +2,52 @@
 
 import type React from "react"
 
-import { useState, useRef } from "react"
+import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Badge } from "@/components/ui/badge"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Upload, FileText, AlertCircle, TrendingUp, Clock, Thermometer } from "lucide-react"
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { AlertCircle, TrendingUp, Thermometer } from "lucide-react"
 
-const predefinedCycles = [
-  {
-    id: "wltp",
-    name: "WLTP (Worldwide Harmonized Light Vehicles Test Procedure)",
-    duration: 1800, // seconds
-    description: "Standard automotive test cycle for fuel consumption and emissions",
-    peakCurrent: 150,
-    avgCurrent: 45,
-  },
-  {
-    id: "ftp75",
-    name: "FTP-75 (Federal Test Procedure)",
-    duration: 1874,
-    description: "US EPA standard driving cycle for light-duty vehicles",
-    peakCurrent: 120,
-    avgCurrent: 38,
-  },
-  {
-    id: "nedc",
-    name: "NEDC (New European Driving Cycle)",
-    duration: 1180,
-    description: "European standard for measuring fuel economy and emissions",
-    peakCurrent: 100,
-    avgCurrent: 32,
-  },
-  {
-    id: "us06",
-    name: "US06 (Supplemental Federal Test Procedure)",
-    duration: 596,
-    description: "Aggressive driving cycle with high speeds and accelerations",
-    peakCurrent: 200,
-    avgCurrent: 65,
-  },
-]
+interface SubCycleStep {
+  value: string
+  isDynamic: boolean
+  unit: "A" | "C" | "W" | "V"
+  duration: number
+  triggerCondition?: string
+  repetitions: number
+}
+
+interface SubCycle {
+  id: string
+  name: string
+  steps: SubCycleStep[]
+}
+
+interface DriveCycleSegment {
+  subCycleId: string
+  repetitions: number
+  ambientTemp: number
+  triggerCondition?: string
+}
+
+interface DriveCycle {
+  id: string
+  name: string
+  segments: DriveCycleSegment[]
+}
+
+interface CalendarRule {
+  months: string // comma-separated, e.g., "1,2,3"
+  filterType: "weekday" | "date"
+  daysOrDates: string // comma-separated, e.g., "Mon,Tue" or "1,15,30"
+  driveCycleId: string
+}
 
 interface DriveCycleBuilderProps {
   onConfigChange: (config: any) => void
@@ -56,125 +56,165 @@ interface DriveCycleBuilderProps {
 }
 
 export function DriveCycleBuilder({ onConfigChange, onNext, onPrevious }: DriveCycleBuilderProps) {
-  const [cycleType, setCycleType] = useState("predefined")
-  const [selectedCycle, setSelectedCycle] = useState("")
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null)
-  const [csvData, setCsvData] = useState<any[]>([])
-  const [csvError, setCsvError] = useState("")
+  const [activeTab, setActiveTab] = useState("subcycle")
+  const [subCycles, setSubCycles] = useState<SubCycle[]>([])
+  const [currentSubCycleId, setCurrentSubCycleId] = useState("")
+  const [currentSubCycleName, setCurrentSubCycleName] = useState("")
+  const [currentSubCycleSteps, setCurrentSubCycleSteps] = useState<SubCycleStep[]>([])
+  const [driveCycles, setDriveCycles] = useState<DriveCycle[]>([])
+  const [currentDriveCycleId, setCurrentDriveCycleId] = useState("")
+  const [currentDriveCycleName, setCurrentDriveCycleName] = useState("")
+  const [currentDriveCycleSegments, setCurrentDriveCycleSegments] = useState<DriveCycleSegment[]>([])
+  const [calendarRules, setCalendarRules] = useState<CalendarRule[]>([])
+  const [newRuleMonths, setNewRuleMonths] = useState("")
+  const [newRuleFilterType, setNewRuleFilterType] = useState<"weekday" | "date">("weekday")
+  const [newRuleDaysOrDates, setNewRuleDaysOrDates] = useState("")
+  const [newRuleDriveCycleId, setNewRuleDriveCycleId] = useState("")
+  const [defaultDriveCycleId, setDefaultDriveCycleId] = useState("")
   const [startingSoc, setStartingSoc] = useState("80")
-  const [ambientTemp, setAmbientTemp] = useState("25")
-  const [repeatCount, setRepeatCount] = useState("1")
+  const [error, setError] = useState("")
 
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  // Sub-Cycle Handlers
+  const addSubCycleStep = () => {
+    setCurrentSubCycleSteps([
+      ...currentSubCycleSteps,
+      { value: "", isDynamic: false, unit: "A", duration: 0, repetitions: 1 },
+    ])
+  }
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
+  const updateSubCycleStep = (index: number, field: keyof SubCycleStep, value: any) => {
+    const updatedSteps = [...currentSubCycleSteps]
+    updatedSteps[index] = { ...updatedSteps[index], [field]: value }
+    setCurrentSubCycleSteps(updatedSteps)
+  }
 
-    if (!file.name.endsWith(".csv")) {
-      setCsvError("Please upload a CSV file")
+  const removeSubCycleStep = (index: number) => {
+    setCurrentSubCycleSteps(currentSubCycleSteps.filter((_, i) => i !== index))
+  }
+
+  const saveSubCycle = () => {
+    if (!currentSubCycleId || !currentSubCycleName || currentSubCycleSteps.length === 0) {
+      setError("Sub-cycle ID, name, and at least one step are required")
       return
     }
-
-    setUploadedFile(file)
-    setCsvError("")
-
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      try {
-        const text = e.target?.result as string
-        const lines = text.split("\n").filter((line) => line.trim())
-        const headers = lines[0].split(",").map((h) => h.trim().toLowerCase())
-
-        // Validate headers
-        const requiredHeaders = ["time_s", "current_a"]
-        const missingHeaders = requiredHeaders.filter((h) => !headers.includes(h))
-
-        if (missingHeaders.length > 0) {
-          setCsvError(`Missing required columns: ${missingHeaders.join(", ")}`)
-          return
-        }
-
-        // Parse data
-        const data = lines.slice(1).map((line, index) => {
-          const values = line.split(",")
-          const timeIndex = headers.indexOf("time_s")
-          const currentIndex = headers.indexOf("current_a")
-          const speedIndex = headers.indexOf("speed_kmh")
-
-          const time = Number.parseFloat(values[timeIndex])
-          const current = Number.parseFloat(values[currentIndex])
-          const speed = speedIndex >= 0 ? Number.parseFloat(values[speedIndex]) : null
-
-          if (isNaN(time) || isNaN(current)) {
-            throw new Error(`Invalid data at line ${index + 2}`)
-          }
-
-          return {
-            time,
-            current,
-            speed: speed || 0,
-          }
-        })
-
-        // Validate time intervals
-        for (let i = 1; i < data.length; i++) {
-          const timeDiff = data[i].time - data[i - 1].time
-          if (timeDiff <= 0) {
-            setCsvError("Time values must be increasing")
-            return
-          }
-        }
-
-        setCsvData(data)
-        setCsvError("")
-      } catch (error) {
-        setCsvError(`Error parsing CSV: ${error instanceof Error ? error.message : "Unknown error"}`)
-      }
+    if (subCycles.some((sc) => sc.id === currentSubCycleId)) {
+      setSubCycles(subCycles.map((sc) => (sc.id === currentSubCycleId ? { id: currentSubCycleId, name: currentSubCycleName, steps: currentSubCycleSteps } : sc)))
+    } else {
+      setSubCycles([...subCycles, { id: currentSubCycleId, name: currentSubCycleName, steps: currentSubCycleSteps }])
     }
-    reader.readAsText(file)
+    resetSubCycleForm()
   }
 
-  const selectedPredefinedCycle = predefinedCycles.find((c) => c.id === selectedCycle)
+  const loadSubCycle = (id: string) => {
+    const sc = subCycles.find((sc) => sc.id === id)
+    if (sc) {
+      setCurrentSubCycleId(sc.id)
+      setCurrentSubCycleName(sc.name)
+      setCurrentSubCycleSteps(sc.steps)
+    }
+  }
+
+  const resetSubCycleForm = () => {
+    setCurrentSubCycleId("")
+    setCurrentSubCycleName("")
+    setCurrentSubCycleSteps([])
+  }
+
+  // Drive Cycle Handlers
+  const addDriveCycleSegment = () => {
+    setCurrentDriveCycleSegments([
+      ...currentDriveCycleSegments,
+      { subCycleId: "", repetitions: 1, ambientTemp: 25 },
+    ])
+  }
+
+  const updateDriveCycleSegment = (index: number, field: keyof DriveCycleSegment, value: any) => {
+    const updatedSegments = [...currentDriveCycleSegments]
+    updatedSegments[index] = { ...updatedSegments[index], [field]: value }
+    setCurrentDriveCycleSegments(updatedSegments)
+  }
+
+  const removeDriveCycleSegment = (index: number) => {
+    setCurrentDriveCycleSegments(currentDriveCycleSegments.filter((_, i) => i !== index))
+  }
+
+  const saveDriveCycle = () => {
+    if (!currentDriveCycleId || !currentDriveCycleName || currentDriveCycleSegments.length === 0) {
+      setError("Drive cycle ID, name, and at least one segment are required")
+      return
+    }
+    if (driveCycles.some((dc) => dc.id === currentDriveCycleId)) {
+      setDriveCycles(driveCycles.map((dc) => (dc.id === currentDriveCycleId ? { id: currentDriveCycleId, name: currentDriveCycleName, segments: currentDriveCycleSegments } : dc)))
+    } else {
+      setDriveCycles([...driveCycles, { id: currentDriveCycleId, name: currentDriveCycleName, segments: currentDriveCycleSegments }])
+    }
+    resetDriveCycleForm()
+  }
+
+  const loadDriveCycle = (id: string) => {
+    const dc = driveCycles.find((dc) => dc.id === id)
+    if (dc) {
+      setCurrentDriveCycleId(dc.id)
+      setCurrentDriveCycleName(dc.name)
+      setCurrentDriveCycleSegments(dc.segments)
+    }
+  }
+
+  const resetDriveCycleForm = () => {
+    setCurrentDriveCycleId("")
+    setCurrentDriveCycleName("")
+    setCurrentDriveCycleSegments([])
+  }
+
+  // Calendar Rule Handlers
+  const addCalendarRule = () => {
+    if (!newRuleMonths || !newRuleDaysOrDates || !newRuleDriveCycleId) {
+      setError("All fields are required for a calendar rule")
+      return
+    }
+    setCalendarRules([
+      ...calendarRules,
+      {
+        months: newRuleMonths,
+        filterType: newRuleFilterType,
+        daysOrDates: newRuleDaysOrDates,
+        driveCycleId: newRuleDriveCycleId,
+      },
+    ])
+    resetRuleForm()
+  }
+
+  const removeCalendarRule = (index: number) => {
+    setCalendarRules(calendarRules.filter((_, i) => i !== index))
+  }
+
+  const resetRuleForm = () => {
+    setNewRuleMonths("")
+    setNewRuleFilterType("weekday")
+    setNewRuleDaysOrDates("")
+    setNewRuleDriveCycleId("")
+  }
 
   const isValid = () => {
-    if (cycleType === "predefined") {
-      return selectedCycle && startingSoc && ambientTemp && repeatCount
-    } else {
-      return csvData.length > 0 && !csvError && startingSoc && ambientTemp && repeatCount
-    }
+    return subCycles.length > 0 && driveCycles.length > 0 && calendarRules.length > 0 && defaultDriveCycleId && startingSoc
   }
 
-  const handleNext = () => {
+  const handleNextClick = () => {
+    setError("")
     if (isValid()) {
       const config = {
-        type: cycleType,
-        cycle: cycleType === "predefined" ? selectedPredefinedCycle : null,
-        csvData: cycleType === "upload" ? csvData : null,
+        subCycles,
+        driveCycles,
+        calendarRules,
+        defaultDriveCycleId,
         startingSoc: Number.parseFloat(startingSoc),
-        ambientTemp: Number.parseFloat(ambientTemp),
-        repeatCount: Number.parseInt(repeatCount),
-        fileName: uploadedFile?.name,
       }
       onConfigChange(config)
       onNext()
+    } else {
+      setError("Please complete all levels: sub-cycles, drive cycles, calendar rules, default DC, and starting SOC")
     }
   }
-
-  // Generate sample data for predefined cycles (simplified visualization)
-  const generatePreviewData = (cycle: any) => {
-    const points = 50
-    const data = []
-    for (let i = 0; i < points; i++) {
-      const time = (i / points) * cycle.duration
-      const current =
-        cycle.avgCurrent + (cycle.peakCurrent - cycle.avgCurrent) * Math.sin(i * 0.3) * Math.random() * 0.8
-      data.push({ time, current })
-    }
-    return data
-  }
-
-  const previewData = selectedPredefinedCycle ? generatePreviewData(selectedPredefinedCycle) : csvData.slice(0, 100) // Limit preview to first 100 points
 
   return (
     <div className="space-y-6">
@@ -184,178 +224,292 @@ export function DriveCycleBuilder({ onConfigChange, onNext, onPrevious }: DriveC
             <TrendingUp className="w-5 h-5" />
             Drive Cycle Builder
           </CardTitle>
-          <CardDescription>Define how your battery pack will be used during simulation</CardDescription>
+          <CardDescription>Build complex usage schedules from sub-cycles to full calendar assignments</CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs value={cycleType} onValueChange={setCycleType} className="space-y-6">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="predefined">Predefined Cycles</TabsTrigger>
-              <TabsTrigger value="upload">Upload CSV</TabsTrigger>
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="subcycle">1. Sub-Cycles</TabsTrigger>
+              <TabsTrigger value="drivecycle">2. Drive Cycles</TabsTrigger>
+              <TabsTrigger value="calendar">3. Calendar Assignment</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="predefined" className="space-y-4">
-              <div className="space-y-3">
-                <Label>Select Drive Cycle</Label>
-                <Select value={selectedCycle} onValueChange={setSelectedCycle}>
+            <TabsContent value="subcycle" className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="subcycle-id">Sub-Cycle ID</Label>
+                  <Input id="subcycle-id" value={currentSubCycleId} onChange={(e) => setCurrentSubCycleId(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="subcycle-name">Name</Label>
+                  <Input id="subcycle-name" value={currentSubCycleName} onChange={(e) => setCurrentSubCycleName(e.target.value)} />
+                </div>
+              </div>
+              <Button onClick={addSubCycleStep}>Add Step</Button>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Value</TableHead>
+                    <TableHead>Dynamic?</TableHead>
+                    <TableHead>Unit</TableHead>
+                    <TableHead>Duration (s)</TableHead>
+                    <TableHead>Trigger Condition</TableHead>
+                    <TableHead>Repetitions</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {currentSubCycleSteps.map((step, index) => (
+                    <TableRow key={index}>
+                      <TableCell>
+                        <Input value={step.value} onChange={(e) => updateSubCycleStep(index, "value", e.target.value)} />
+                      </TableCell>
+                      <TableCell>
+                        <Checkbox checked={step.isDynamic} onCheckedChange={(checked) => updateSubCycleStep(index, "isDynamic", checked)} />
+                      </TableCell>
+                      <TableCell>
+                        <Select value={step.unit} onValueChange={(value: "A" | "C" | "W" | "V") => updateSubCycleStep(index, "unit", value)}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="A">A (Current)</SelectItem>
+                            <SelectItem value="C">C-rate</SelectItem>
+                            <SelectItem value="W">W (Power)</SelectItem>
+                            <SelectItem value="V">V (Voltage)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      <TableCell>
+                        <Input type="number" value={step.duration} onChange={(e) => updateSubCycleStep(index, "duration", Number.parseFloat(e.target.value))} />
+                      </TableCell>
+                      <TableCell>
+                        <Input value={step.triggerCondition || ""} onChange={(e) => updateSubCycleStep(index, "triggerCondition", e.target.value)} />
+                      </TableCell>
+                      <TableCell>
+                        <Input type="number" value={step.repetitions} onChange={(e) => updateSubCycleStep(index, "repetitions", Number.parseInt(e.target.value))} />
+                      </TableCell>
+                      <TableCell>
+                        <Button variant="destructive" onClick={() => removeSubCycleStep(index)}>Remove</Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              <Button onClick={saveSubCycle}>Save to Library</Button>
+              <div className="space-y-2">
+                <Label>Load Existing Sub-Cycle</Label>
+                <Select onValueChange={loadSubCycle}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Choose a standard drive cycle" />
+                    <SelectValue placeholder="Select sub-cycle" />
                   </SelectTrigger>
                   <SelectContent>
-                    {predefinedCycles.map((cycle) => (
-                      <SelectItem key={cycle.id} value={cycle.id}>
-                        <div className="flex flex-col">
-                          <span className="font-medium">{cycle.name}</span>
-                          <span className="text-sm text-muted-foreground">{cycle.description}</span>
-                        </div>
+                    {subCycles.map((sc) => (
+                      <SelectItem key={sc.id} value={sc.id}>
+                        {sc.name} ({sc.id})
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-
-              {selectedPredefinedCycle && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-muted rounded-lg">
-                  <div className="text-center">
-                    <Clock className="w-5 h-5 mx-auto mb-1 text-accent" />
-                    <div className="text-sm text-muted-foreground">Duration</div>
-                    <div className="font-semibold">{selectedPredefinedCycle.duration}s</div>
-                  </div>
-                  <div className="text-center">
-                    <TrendingUp className="w-5 h-5 mx-auto mb-1 text-accent" />
-                    <div className="text-sm text-muted-foreground">Peak Current</div>
-                    <div className="font-semibold">{selectedPredefinedCycle.peakCurrent}A</div>
-                  </div>
-                  <div className="text-center">
-                    <TrendingUp className="w-5 h-5 mx-auto mb-1 text-accent" />
-                    <div className="text-sm text-muted-foreground">Avg Current</div>
-                    <div className="font-semibold">{selectedPredefinedCycle.avgCurrent}A</div>
-                  </div>
-                </div>
-              )}
             </TabsContent>
 
-            <TabsContent value="upload" className="space-y-4">
-              <div className="space-y-3">
-                <Label>Upload Drive Cycle CSV</Label>
-                <div
-                  className="border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:border-accent transition-colors"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-                  <div className="text-sm text-muted-foreground mb-2">Click to upload or drag and drop</div>
-                  <div className="text-xs text-muted-foreground">
-                    CSV format: time_s, current_a, speed_kmh (optional)
-                  </div>
-                  <input ref={fileInputRef} type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
+            <TabsContent value="drivecycle" className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="drivecycle-id">Drive Cycle ID</Label>
+                  <Input id="drivecycle-id" value={currentDriveCycleId} onChange={(e) => setCurrentDriveCycleId(e.target.value)} />
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="drivecycle-name">Name</Label>
+                  <Input id="drivecycle-name" value={currentDriveCycleName} onChange={(e) => setCurrentDriveCycleName(e.target.value)} />
+                </div>
+              </div>
+              <Button onClick={addDriveCycleSegment}>Add Segment</Button>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Sub-Cycle ID</TableHead>
+                    <TableHead>Repetitions</TableHead>
+                    <TableHead>Ambient Temp (°C)</TableHead>
+                    <TableHead>Trigger Condition</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {currentDriveCycleSegments.map((segment, index) => (
+                    <TableRow key={index}>
+                      <TableCell>
+                        <Select value={segment.subCycleId} onValueChange={(value) => updateDriveCycleSegment(index, "subCycleId", value)}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {subCycles.map((sc) => (
+                              <SelectItem key={sc.id} value={sc.id}>
+                                {sc.name} ({sc.id})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      <TableCell>
+                        <Input type="number" value={segment.repetitions} onChange={(e) => updateDriveCycleSegment(index, "repetitions", Number.parseInt(e.target.value))} />
+                      </TableCell>
+                      <TableCell>
+                        <Input type="number" value={segment.ambientTemp} onChange={(e) => updateDriveCycleSegment(index, "ambientTemp", Number.parseFloat(e.target.value))} />
+                      </TableCell>
+                      <TableCell>
+                        <Input value={segment.triggerCondition || ""} onChange={(e) => updateDriveCycleSegment(index, "triggerCondition", e.target.value)} />
+                      </TableCell>
+                      <TableCell>
+                        <Button variant="destructive" onClick={() => removeDriveCycleSegment(index)}>Remove</Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              <Button onClick={saveDriveCycle}>Save to Library</Button>
+              <div className="space-y-2">
+                <Label>Load Existing Drive Cycle</Label>
+                <Select onValueChange={loadDriveCycle}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select drive cycle" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {driveCycles.map((dc) => (
+                      <SelectItem key={dc.id} value={dc.id}>
+                        {dc.name} ({dc.id})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </TabsContent>
 
-                {uploadedFile && (
-                  <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
-                    <FileText className="w-4 h-4 text-accent" />
-                    <span className="text-sm font-medium">{uploadedFile.name}</span>
-                    <Badge variant="secondary">{csvData.length} points</Badge>
+            <TabsContent value="calendar" className="space-y-4">
+              <div className="space-y-4">
+                <div className="grid grid-cols-4 gap-4">
+                  <div className="space-y-2">
+                    <Label>Months (comma-separated)</Label>
+                    <Input value={newRuleMonths} onChange={(e) => setNewRuleMonths(e.target.value)} placeholder="1,2,3" />
                   </div>
-                )}
-
-                {csvError && (
-                  <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>{csvError}</AlertDescription>
-                  </Alert>
-                )}
+                  <div className="space-y-2">
+                    <Label>Filter Type</Label>
+                    <Select value={newRuleFilterType} onValueChange={(value: "weekday" | "date") => setNewRuleFilterType(value)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="weekday">Weekday</SelectItem>
+                        <SelectItem value="date">Date</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Days/Dates (comma-separated)</Label>
+                    <Input value={newRuleDaysOrDates} onChange={(e) => setNewRuleDaysOrDates(e.target.value)} placeholder="Mon,Tue or 1,15,30" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Drive Cycle ID</Label>
+                    <Select value={newRuleDriveCycleId} onValueChange={setNewRuleDriveCycleId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select DC" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {driveCycles.map((dc) => (
+                          <SelectItem key={dc.id} value={dc.id}>
+                            {dc.name} ({dc.id})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <Button onClick={addCalendarRule}>Add Rule</Button>
+              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Months</TableHead>
+                    <TableHead>Filter Type</TableHead>
+                    <TableHead>Days/Dates</TableHead>
+                    <TableHead>Drive Cycle ID</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {calendarRules.map((rule, index) => (
+                    <TableRow key={index}>
+                      <TableCell>{rule.months}</TableCell>
+                      <TableCell>{rule.filterType}</TableCell>
+                      <TableCell>{rule.daysOrDates}</TableCell>
+                      <TableCell>{rule.driveCycleId}</TableCell>
+                      <TableCell>
+                        <Button variant="destructive" onClick={() => removeCalendarRule(index)}>Remove</Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              <div className="space-y-2">
+                <Label>Default Drive Cycle ID (for unmatched days)</Label>
+                <Select value={defaultDriveCycleId} onValueChange={setDefaultDriveCycleId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select default DC (e.g., DC_IDLE)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {driveCycles.map((dc) => (
+                      <SelectItem key={dc.id} value={dc.id}>
+                        {dc.name} ({dc.id})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </TabsContent>
           </Tabs>
         </CardContent>
       </Card>
 
-      {/* Preview Chart */}
-      {previewData.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Drive Cycle Preview</CardTitle>
-            <CardDescription>Current profile over time</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="h-65 pd-10">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={previewData}margin={{ bottom: 20 , left: 10}}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="time" label={{ value: "Time (s)", position: "insideBottom",  offset: 5, dy:20}} />
-                  <YAxis label={{ value: "Current (A)", angle: -90, position: "insideLeft" }} />
-                  <Tooltip
-                    formatter={(value: any) => [`${value.toFixed(1)}A`, "Current"]}
-                    labelFormatter={(value: any) => `Time: ${value.toFixed(1)}s`}
-                  />
-                  <Line type="monotone" dataKey="current" stroke="var(--accent)" strokeWidth={2} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       {/* Simulation Parameters */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Thermometer className="w-5 h-5" />
-            Simulation Parameters
+            Global Simulation Parameters
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="space-y-3">
-              <Label htmlFor="starting-soc">Starting SOC (%)</Label>
-              <Input
-                id="starting-soc"
-                type="number"
-                placeholder="80"
-                value={startingSoc}
-                onChange={(e) => setStartingSoc(e.target.value)}
-                min="0"
-                max="100"
-              />
-              <p className="text-sm text-muted-foreground">Initial state of charge (0-100%)</p>
-            </div>
-
-            <div className="space-y-3">
-              <Label htmlFor="ambient-temp">Ambient Temperature (°C)</Label>
-              <Input
-                id="ambient-temp"
-                type="number"
-                placeholder="25"
-                value={ambientTemp}
-                onChange={(e) => setAmbientTemp(e.target.value)}
-                min="-40"
-                max="60"
-              />
-              <p className="text-sm text-muted-foreground">Environmental temperature</p>
-            </div>
-
-            <div className="space-y-3">
-              <Label htmlFor="repeat-count">Number of Repeats</Label>
-              <Input
-                id="repeat-count"
-                type="number"
-                placeholder="1"
-                value={repeatCount}
-                onChange={(e) => setRepeatCount(e.target.value)}
-                min="1"
-                max="10"
-              />
-              <p className="text-sm text-muted-foreground">How many times to repeat the cycle</p>
-            </div>
+          <div className="space-y-3 max-w-md">
+            <Label htmlFor="starting-soc">Starting SOC (%)</Label>
+            <Input
+              id="starting-soc"
+              type="number"
+              placeholder="80"
+              value={startingSoc}
+              onChange={(e) => setStartingSoc(e.target.value)}
+              min="0"
+              max="100"
+            />
+            <p className="text-sm text-muted-foreground">Initial state of charge (0-100%)</p>
           </div>
         </CardContent>
       </Card>
+
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
       {/* Navigation */}
       <div className="flex justify-between">
         <Button variant="outline" onClick={onPrevious}>
           Previous: Pack Builder
         </Button>
-        <Button onClick={handleNext} disabled={!isValid()} className="min-w-32">
+        <Button onClick={handleNextClick} disabled={!isValid()} className="min-w-32">
           Next: Configure Models
         </Button>
       </div>
