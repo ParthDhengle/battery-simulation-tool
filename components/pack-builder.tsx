@@ -563,35 +563,38 @@ export function PackBuilder({ onConfigChange, onNext }: PackBuilderProps) {
           <CardDescription>Define your battery pack geometry</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="space-y-3">
-            <Label>Cell Selection Mode</Label>
-            <Select value={cellSelection} onValueChange={(v) => setCellSelection(v as 'library' | 'custom')}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="library">From Library</SelectItem>
-                <SelectItem value="custom">Custom</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          {cellSelection === 'library' && (
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-3">
-              <Label>Select Cell</Label>
-              <Select value={selectedCellName} onValueChange={handleSelectCell}>
+              <Label>Cell Selection Mode</Label>
+              <Select value={cellSelection} onValueChange={(v) => setCellSelection(v as 'library' | 'custom')}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {cellLibrary.map((cell) => (
-                    <SelectItem key={cell.name} value={cell.name}>
-                      {cell.name}
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="library">From Library</SelectItem>
+                  <SelectItem value="custom">Custom</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-          )}
+            {cellSelection === 'library' && (
+              <div className="space-y-3">
+                <Label>Select Cell</Label>
+                <Select value={selectedCellName} onValueChange={handleSelectCell}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {cellLibrary.map((cell) => (
+                      <SelectItem key={cell.name} value={cell.name}>
+                        {cell.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+          
           <div className="space-y-3">
             <Label htmlFor="form-factor">Cell Form Factor</Label>
             <Select value={formFactor} onValueChange={(v) => setFormFactor(v as 'cylindrical' | 'prismatic')}>
@@ -604,7 +607,7 @@ export function PackBuilder({ onConfigChange, onNext }: PackBuilderProps) {
               </SelectContent>
             </Select>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             {formFactor === 'cylindrical' ? (
               <>
                 <div className="space-y-3">
@@ -626,7 +629,7 @@ export function PackBuilder({ onConfigChange, onNext }: PackBuilderProps) {
                   <Label>Width (mm)</Label>
                   <Input type="number" min="0" value={dims.width ?? ''} onChange={(e) => handleDimsChange('width', e.target.value)} />
                 </div>
-                <div className="space-y-3 col-span-2">
+                <div className="space-y-3">
                   <Label>Height (mm)</Label>
                   <Input type="number" min="0" value={dims.height ?? ''} onChange={(e) => handleDimsChange('height', e.target.value)} />
                 </div>
@@ -635,29 +638,37 @@ export function PackBuilder({ onConfigChange, onNext }: PackBuilderProps) {
           </div>
           {/* New: Single Cell 3D Preview placed here, right after dimensions */}
           <CellPreview3D formFactor={formFactor} dims={dims} />
-          <div className="space-y-3">
-            <Label>Capacity (Ah)</Label>
-            <Input type="number" min="0" value={capacity} onChange={(e) => setCapacity(parseFloat(e.target.value) || 0)} />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-3">
+              <Label>Capacity (Ah)</Label>
+              <Input type="number" min="0" value={capacity} onChange={(e) => setCapacity(parseFloat(e.target.value) || 0)} />
+            </div>
+            <div className="space-y-3">
+              <Label>Columbic Efficiency</Label>
+              <Input type="number" value={columbicEfficiency} onChange={(e) => setColumbicEfficiency(parseFloat(e.target.value) || 1.0)} />
+            </div>
           </div>
-          <div className="space-y-3">
-            <Label>Columbic Efficiency</Label>
-            <Input type="number" value={columbicEfficiency} onChange={(e) => setColumbicEfficiency(parseFloat(e.target.value) || 1.0)} />
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-3">
+              <Label>Cell Mass (kg)</Label>
+              <Input type="number" min="0" value={mCell} onChange={(e) => setMCell(parseFloat(e.target.value) || 0)} />
+            </div>
+            <div className="space-y-3">
+              <Label>Jellyroll Mass (kg)</Label>
+              <Input type="number" min="0" value={mJellyroll} onChange={(e) => setMJellyroll(parseFloat(e.target.value) || 0)} />
+            </div>
           </div>
-          <div className="space-y-3">
-            <Label>Cell Mass (kg)</Label>
-            <Input type="number" min="0" value={mCell} onChange={(e) => setMCell(parseFloat(e.target.value) || 0)} />
-          </div>
-          <div className="space-y-3">
-            <Label>Jellyroll Mass (kg)</Label>
-            <Input type="number" min="0" value={mJellyroll} onChange={(e) => setMJellyroll(parseFloat(e.target.value) || 0)} />
-          </div>
-          <div className="space-y-3">
-            <Label>Cell Voltage Upper Limit (V)</Label>
-            <Input type="number" value={cellUpperVoltage} onChange={(e) => setCellUpperVoltage(e.target.value)} />
-          </div>
-          <div className="space-y-3">
-            <Label>Cell Voltage Lower Limit (V)</Label>
-            <Input type="number" value={cellLowerVoltage} onChange={(e) => setCellLowerVoltage(e.target.value)} />
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-3">
+              <Label>Cell Voltage Upper Limit (V)</Label>
+              <Input type="number" value={cellUpperVoltage} onChange={(e) => setCellUpperVoltage(e.target.value)} />
+            </div>
+            <div className="space-y-3">
+              <Label>Cell Voltage Lower Limit (V)</Label>
+              <Input type="number" value={cellLowerVoltage} onChange={(e) => setCellLowerVoltage(e.target.value)} />
+            </div>
           </div>
           <div className="space-y-3">
             <Label>Custom Cell Name (for saving)</Label>
@@ -694,21 +705,26 @@ export function PackBuilder({ onConfigChange, onNext }: PackBuilderProps) {
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-3">
-            <Label>R_p (Ohms) - Parallel Connection Resistance</Label>
-            <Input type="number" value={rP} onChange={(e) => setRP(parseFloat(e.target.value) || 0)} />
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-3">
+              <Label>R_p (Ohms) - Parallel Connection Resistance</Label>
+              <Input type="number" value={rP} onChange={(e) => setRP(parseFloat(e.target.value) || 0)} />
+            </div>
+            <div className="space-y-3">
+              <Label>R_s (Ohms) - Series Connection Resistance</Label>
+              <Input type="number" value={rS} onChange={(e) => setRS(parseFloat(e.target.value) || 0)} />
+            </div>
           </div>
-          <div className="space-y-3">
-            <Label>R_s (Ohms) - Series Connection Resistance</Label>
-            <Input type="number" value={rS} onChange={(e) => setRS(parseFloat(e.target.value) || 0)} />
-          </div>
-          <div className="space-y-3">
-            <Label>Module Voltage Upper Limit (V)</Label>
-            <Input type="number" value={moduleUpperVoltage} onChange={(e) => setModuleUpperVoltage(e.target.value)} />
-          </div>
-          <div className="space-y-3">
-            <Label>Module Voltage Lower Limit (V)</Label>
-            <Input type="number" value={moduleLowerVoltage} onChange={(e) => setModuleLowerVoltage(e.target.value)} />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-3">
+              <Label>Module Voltage Upper Limit (V)</Label>
+              <Input type="number" value={moduleUpperVoltage} onChange={(e) => setModuleUpperVoltage(e.target.value)} />
+            </div>
+            <div className="space-y-3">
+              <Label>Module Voltage Lower Limit (V)</Label>
+              <Input type="number" value={moduleLowerVoltage} onChange={(e) => setModuleLowerVoltage(e.target.value)} />
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -732,13 +748,15 @@ export function PackBuilder({ onConfigChange, onNext }: PackBuilderProps) {
           <CardTitle>Design Constraints (Optional)</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="space-y-3">
-            <Label>Maximum Weight (kg)</Label>
-            <Input type="number" value={maxWeight} onChange={(e) => setMaxWeight(e.target.value)} />
-          </div>
-          <div className="space-y-3">
-            <Label>Maximum Volume (m³)</Label>
-            <Input type="number" value={maxVolume} onChange={(e) => setMaxVolume(e.target.value)} />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-3">
+              <Label>Maximum Weight (kg)</Label>
+              <Input type="number" value={maxWeight} onChange={(e) => setMaxWeight(e.target.value)} />
+            </div>
+            <div className="space-y-3">
+              <Label>Maximum Volume (m³)</Label>
+              <Input type="number" value={maxVolume} onChange={(e) => setMaxVolume(e.target.value)} />
+            </div>
           </div>
         </CardContent>
       </Card>

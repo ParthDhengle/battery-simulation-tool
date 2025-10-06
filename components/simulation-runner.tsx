@@ -5,8 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Play, AlertCircle, CheckCircle, Loader2 } from "lucide-react"
-
+import { Play, AlertCircle, CheckCircle, Loader2, ChevronsUpDown  } from "lucide-react"
+import { ConfigReviewDisplay } from "@/components/ConfigReview"
 interface SimulationRunnerProps {
   packConfig: any
   driveConfig: any
@@ -28,7 +28,7 @@ export function SimulationRunner({
   const [logs, setLogs] = useState<string[]>([])
   const [error, setError] = useState("")
   const [completed, setCompleted] = useState(false)
-
+  const [showDetails, setShowDetails] = useState(false)
   // Simulate the physics-based calculation
   const runSimulation = async () => {
     setIsRunning(true)
@@ -177,37 +177,51 @@ export function SimulationRunner({
             <Play className="w-5 h-5" />
             Run Simulation
           </CardTitle>
-          <CardDescription>Execute physics-based battery pack simulation</CardDescription>
-        </CardHeader>
+          <CardDescription>Review your configuration and execute the simulation.</CardDescription>
+          </CardHeader>
         <CardContent className="space-y-6">
           {/* Configuration Summary */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-muted rounded-lg">
-            <div>
-              <div className="text-sm text-muted-foreground">Pack Configuration</div>
-              <div className="font-medium">
-                {packConfig?.seriesCount}S{packConfig?.parallelCount}P
+          <div className="p-4 bg-muted rounded-lg">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <div className="text-sm text-muted-foreground">Pack Config</div>
+                <div className="font-medium">
+                  {packConfig?.cells?.length} cells ({packConfig?.meta?.formFactor})
+                </div>
               </div>
-              <div className="text-sm text-muted-foreground">{packConfig?.cell?.name}</div>
+              <div>
+                <div className="text-sm text-muted-foreground">Drive Cycle</div>
+                <div className="font-medium">
+                  {driveConfig?.driveCycles?.length || 0} cycles defined
+                </div>
+              </div>
+              <div>
+                <div className="text-sm text-muted-foreground">Complexity</div>
+                <div className="font-medium">
+                  {simulationConfig?.complexityLevel}
+                </div>
+              </div>
             </div>
-            <div>
-              <div className="text-sm text-muted-foreground">Drive Cycle</div>
-              <div className="font-medium">
-                {driveConfig?.type === "predefined"
-                  ? driveConfig?.cycle?.name
-                  : `Custom (${driveConfig?.csvData?.length} points)`}
-              </div>
-              <div className="text-sm text-muted-foreground">{driveConfig?.repeatCount} repeat(s)</div>
-            </div>
-            <div>
-              <div className="text-sm text-muted-foreground">Models Enabled</div>
-              <div className="font-medium">{simulationConfig?.electrical?.details?.name}</div>
-              <div className="text-sm text-muted-foreground">
-                {simulationConfig?.thermal?.enabled && "Thermal"}
-                {simulationConfig?.life?.enabled && " Life"}
-                {simulationConfig?.busbar?.enabled && " Busbar"}
-              </div>
+            <div className="text-center mt-4">
+              <Button
+                variant="link"
+                className="text-sm h-auto p-1"
+                onClick={() => setShowDetails(!showDetails)}
+              >
+                <ChevronsUpDown className="w-4 h-4 mr-2" />
+                {showDetails ? "Hide Full Configuration" : "Show Full Configuration"}
+              </Button>
             </div>
           </div>
+          
+          {/* This now renders the complete 3-part review when toggled */}
+          {showDetails && (
+            <ConfigReviewDisplay
+              packConfig={packConfig}
+              driveConfig={driveConfig}
+              simulationConfig={simulationConfig}
+            />
+          )}
 
           {/* Progress Section */}
           {(isRunning || completed) && (

@@ -236,22 +236,22 @@ export function SimulationSetup({ onConfigChange, onNext, onPrevious }: Simulati
       </Card>
 
       {/* Thermal Model Configuration */}
-      <Card>
-        <CardHeader>
+      {/* <Card> */
+        /* <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Thermometer className="w-5 h-5" />
             Thermal Model
           </CardTitle>
           <CardDescription>Enable thermal effects and heat transfer simulation</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+        </CardHeader> */
+        /* <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="space-y-1">
               <Label htmlFor="thermal-enabled">Enable Thermal Simulation</Label>
               <p className="text-sm text-muted-foreground">Include temperature effects on battery performance</p>
             </div>
             <Switch id="thermal-enabled" checked={thermalEnabled} onCheckedChange={setThermalEnabled} />
-          </div>
+          </div> */}
 
           {thermalEnabled && (
             <>
@@ -299,11 +299,11 @@ export function SimulationSetup({ onConfigChange, onNext, onPrevious }: Simulati
               </div>
             </>
           )}
-        </CardContent>
-      </Card>
+        {/* </CardContent> */
+      /* </Card> */}
 
       {/* Life Model Configuration */}
-      <Card>
+      {/* <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <TrendingDown className="w-5 h-5" />
@@ -330,7 +330,7 @@ export function SimulationSetup({ onConfigChange, onNext, onPrevious }: Simulati
             </Alert>
           )}
         </CardContent>
-      </Card>
+      </Card> */}
 
       {/* Advanced: Busbar Model */}
       <Card>
