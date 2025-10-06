@@ -1,6 +1,5 @@
 "use client"
-
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,16 +9,20 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { AlertCircle, Battery } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 
+// New imports for 3D visualization
+import { Canvas } from '@react-three/fiber'
+import { OrbitControls, PerspectiveCamera } from '@react-three/drei'
+import * as THREE from 'three'
+
 interface PackBuilderProps {
   onConfigChange: (config: any) => void
   onNext: () => void
 }
-
 export function PackBuilder({ onConfigChange, onNext }: PackBuilderProps) {
-  const [cellSelection, setCellSelection] = useState<'library' | 'custom'>('library')
+  const [cellSelection, setCellSelection] = useState<'library' | 'custom'>('library') 
   const [selectedCellName, setSelectedCellName] = useState('Samsung 21700-50E')
   const [customName, setCustomName] = useState('')
-  type CellConfig = 
+  type CellConfig =
     | {
         name: string;
         formFactor: 'cylindrical';
@@ -42,7 +45,6 @@ export function PackBuilder({ onConfigChange, onNext }: PackBuilderProps) {
         cell_voltage_upper_limit: number;
         cell_voltage_lower_limit: number;
       };
-
   const [cellLibrary, setCellLibrary] = useState<CellConfig[]>([
     {
       name: 'Samsung 21700-50E',
@@ -78,7 +80,6 @@ export function PackBuilder({ onConfigChange, onNext }: PackBuilderProps) {
       cell_voltage_lower_limit: 2.5,
     },
   ]);
-
   const [formFactor, setFormFactor] = useState<'cylindrical' | 'prismatic'>('cylindrical')
   const [dims, setDims] = useState<{ radius?: number; length?: number; width?: number; height: number }>({ height: 70 })
   const [capacity, setCapacity] = useState(5)
@@ -100,18 +101,19 @@ export function PackBuilder({ onConfigChange, onNext }: PackBuilderProps) {
   const [zPitch, setZPitch] = useState('')
   const [layers, setLayers] = useState<Layer[]>([])
   const [nextId, setNextId] = useState(1)
+  // New state for preview
+  const [previewCells, setPreviewCells] = useState<any[]>([])
 
   interface Layer {
     id: number
     gridType: string
-    nRows: string
-    nCols: string
-    pitchX: string
-    pitchY: string
+    nRows: number
+    nCols: number
+    pitchX: number
+    pitchY: number
     zMode: 'index_pitch' | 'explicit'
     zCenter: string
   }
-
   const handleSelectCell = (name: string) => {
     setSelectedCellName(name)
     const cell = cellLibrary.find((c) => c.name === name)
@@ -127,13 +129,11 @@ export function PackBuilder({ onConfigChange, onNext }: PackBuilderProps) {
     }
   }
 
-  
   const saveCustomCell = () => {
     if (!customName) {
       alert('Please enter a name for the custom cell');
       return;
     }
-
     if (formFactor === 'cylindrical') {
       if (!dims.radius || !dims.height) {
         alert('Invalid dimensions for cylindrical cells');
@@ -173,72 +173,90 @@ export function PackBuilder({ onConfigChange, onNext }: PackBuilderProps) {
     setCellSelection('library');
     setSelectedCellName(customName);
   };
+  const getMinPitchX = (formFactor: string, dims: any) => {
+    if (formFactor === "cylindrical") return 2 * (dims.radius ?? 0);
+    if (formFactor === "prismatic") return (dims.length ?? 0);
+    return 0;
+  };
 
+  const getMinPitchY = (formFactor: string, dims: any) => {
+    if (formFactor === "cylindrical") return 2 * (dims.radius ?? 0);
+    if (formFactor === "prismatic") return (dims.width ?? 0);
+    return 0;
+  }; 
+ 
   const addLayer = () => {
-    setLayers([...layers, { id: nextId, gridType: 'rectangular', nRows: '', nCols: '', pitchX: '', pitchY: '', zMode: 'index_pitch', zCenter: '' }])
+    const minPitchX = getMinPitchX(formFactor, dims);
+    const minPitchY = getMinPitchY(formFactor, dims);
+
+    setLayers([...layers, { id: nextId, gridType: 'rectangular', nRows: 3, nCols: 3, pitchX: minPitchX+2, pitchY: minPitchY+2, zMode: 'explicit', zCenter: '1' }])
     setNextId(nextId + 1)
   }
-
   const removeLayer = (id: number) => {
     setLayers(layers.filter((l) => l.id !== id))
   }
-
   const updateLayer = (id: number, field: keyof Layer, value: string) => {
     setLayers(layers.map((l) => (l.id === id ? { ...l, [field]: value } : l)))
   }
-
   const handleDimsChange = (field: string, value: string) => {
+    const num = parseFloat(value)
+    if (num < 0) return;
     setDims({ ...dims, [field]: value === '' ? undefined : parseFloat(value) })
   }
-
   const useIndexPitch = layers.some((l) => l.zMode === 'index_pitch')
-
   const gridTypes = formFactor === 'cylindrical'
     ? ['rectangular', 'brick_row_stagger', 'hex_flat', 'hex_pointy']
     : ['rectangular', 'brick_row_stagger']
+  
+  const getPitchXCondition = (formFactor: string) => {
+    if (formFactor === "cylindrical") return "greater than diameter";
+    if (formFactor === "prismatic") return "greater than length";
+    return "";
+  };
+  const getPitchYCondition = (formFactor: string) => {
+    if (formFactor === "cylindrical") return "greater than diameter";
+    if (formFactor === "prismatic") return "greater than width";
+    return "";
+  };
 
   const hasWarnings = () => {
     let total = 0
     for (const layer of layers) {
-      const nr = parseInt(layer.nRows) || 0
-      const nc = parseInt(layer.nCols) || 0
+      const nr = parseInt(layer.nRows.toString()) || 0
+      const nc = parseInt(layer.nCols.toString()) || 0
       total += nr * nc
     }
     return total > 1000
   }
-
-  const validateAndGenerate = () => {
+  const validateAndGenerate = (isPreview: boolean = false) => {
     let realDims: { radius?: number; length?: number; width?: number; height: number } = { height: (dims.height || 0) / 1000 }
     if (formFactor === 'cylindrical') {
       if (!dims.radius || dims.radius <= 0 || !dims.height || dims.height <= 0) {
-        alert('Invalid dimensions for cylindrical cells')
+        if (!isPreview) alert('Invalid dimensions for cylindrical cells')
         return null
       }
       realDims.radius = dims.radius / 1000
     } else {
       if (!dims.length || dims.length <= 0 || !dims.width || dims.width <= 0 || !dims.height || dims.height <= 0) {
-        alert('Invalid dimensions for prismatic cells')
+        if (!isPreview) alert('Invalid dimensions for prismatic cells')
         return null
       }
       realDims.length = dims.length / 1000
       realDims.width = dims.width / 1000
     }
-
     if (layers.length === 0) {
-      alert('Add at least one layer')
+      if (!isPreview) alert('Add at least one layer')
       return null
     }
-
     let realZPitch = 0
     if (useIndexPitch) {
       realZPitch = parseFloat(zPitch)
       if (isNaN(realZPitch) || realZPitch <= 0) {
-        alert('Invalid z pitch')
+        if (!isPreview) alert('Invalid z pitch')
         return null
       }
       realZPitch /= 1000
     }
-
     const zCenters: number[] = []
     for (let li = 0; li < layers.length; li++) {
       const l = li + 1
@@ -249,36 +267,31 @@ export function PackBuilder({ onConfigChange, onNext }: PackBuilderProps) {
       } else {
         z = parseFloat(layer.zCenter)
         if (isNaN(z)) {
-          alert(`Invalid z center for layer ${l}`)
+          if (!isPreview) alert(`Invalid z center for layer ${l}`)
           return null
         }
         z /= 1000
       }
       zCenters.push(z)
     }
-
     const shift = zCenters[0]
     zCenters.forEach((_, i) => (zCenters[i] -= shift))
-
     let cells: any[] = []
     let indexMap = new Map<string, number>()
     let globalIndex = 1
     let layerConfigs: any[] = []
-
     try {
       for (let li = 0; li < layers.length; li++) {
         const l = li + 1
         const layer = layers[li]
         const grid_type = layer.gridType
-        const n_rows = parseInt(layer.nRows)
-        const n_cols = parseInt(layer.nCols)
-        const pitch_x = parseFloat(layer.pitchX) / 1000
-        const pitch_y = parseFloat(layer.pitchY) / 1000
-
+        const n_rows = parseInt(layer.nRows.toString())
+        const n_cols = parseInt(layer.nCols.toString())
+        const pitch_x = parseFloat(layer.pitchX.toString()) / 1000
+        const pitch_y = parseFloat(layer.pitchY.toString()) / 1000
         if (isNaN(n_rows) || n_rows <= 0 || isNaN(n_cols) || n_cols <= 0 || isNaN(pitch_x) || pitch_x <= 0 || isNaN(pitch_y) || pitch_y <= 0) {
           throw new Error(`Invalid parameters for layer ${l}`)
         }
-
         if (!allowOverlap) {
           if (formFactor === 'prismatic') {
             if (pitch_x < realDims.length! || pitch_y < realDims.width!) {
@@ -291,17 +304,16 @@ export function PackBuilder({ onConfigChange, onNext }: PackBuilderProps) {
               min_dist = Math.min(pitch_x, pitch_y)
             } else if (grid_type === 'brick_row_stagger' || grid_type === 'hex_flat') {
               const diag = Math.sqrt((0.5 * pitch_x) ** 2 + pitch_y ** 2)
-              min_dist = Math.min(pitch_x, pitch_y, diag)
+              min_dist = Math.min(pitch_x, diag)
             } else if (grid_type === 'hex_pointy') {
               const diag = Math.sqrt((0.5 * pitch_y) ** 2 + pitch_x ** 2)
-              min_dist = Math.min(pitch_x, pitch_y, diag)
+              min_dist = Math.min(pitch_y, diag)
             }
             if (min_dist < d) {
               throw new Error(`Pitch settings would cause cell overlap in layer ${l}`)
             }
           }
         }
-
         const z = zCenters[li]
         layerConfigs.push({
           grid_type,
@@ -312,7 +324,6 @@ export function PackBuilder({ onConfigChange, onNext }: PackBuilderProps) {
           z_center: z,
           z_mode: layer.zMode,
         })
-
         for (let r = 1; r <= n_rows; r++) {
           for (let c = 1; c <= n_cols; c++) {
             let x = 0
@@ -327,9 +338,7 @@ export function PackBuilder({ onConfigChange, onNext }: PackBuilderProps) {
               x = (c - 1) * pitch_x
               y = (r - 1) * pitch_y + (c % 2 === 1 ? 0.5 * pitch_y : 0)
             }
-
             const position = [x, y, z]
-
             let half_x = 0
             let half_y = 0
             if (formFactor === 'cylindrical') {
@@ -339,14 +348,12 @@ export function PackBuilder({ onConfigChange, onNext }: PackBuilderProps) {
               half_x = realDims.length! / 2
               half_y = realDims.width! / 2
             }
-
             const bbox_2d = {
               xmin: x - half_x,
               xmax: x + half_x,
               ymin: y - half_y,
               ymax: y + half_y,
             }
-
             const defaultLabel = `R${r}C${c}L${l}`
             let label = defaultLabel
             if (labelSchema) {
@@ -355,7 +362,6 @@ export function PackBuilder({ onConfigChange, onNext }: PackBuilderProps) {
                 .replace('{col}', c.toString())
                 .replace('{layer}', l.toString())
             }
-
             const cell = {
               global_index: globalIndex,
               layer_index: l,
@@ -367,14 +373,12 @@ export function PackBuilder({ onConfigChange, onNext }: PackBuilderProps) {
               neighbors_same_layer: [],
               label,
             }
-
             cells.push(cell)
             indexMap.set(`${l}-${r}-${c}`, globalIndex)
             globalIndex++
           }
         }
       }
-
       if (computeNeighbors) {
         for (const cell of cells) {
           const l = cell.layer_index
@@ -384,7 +388,6 @@ export function PackBuilder({ onConfigChange, onNext }: PackBuilderProps) {
           const grid_type = layerConfig.grid_type
           const n_rows = layerConfig.n_rows
           const n_cols = layerConfig.n_cols
-
           let dirs: [number, number][] = []
           const is_hex = grid_type === 'hex_flat' || grid_type === 'hex_pointy'
           if (is_hex) {
@@ -407,7 +410,6 @@ export function PackBuilder({ onConfigChange, onNext }: PackBuilderProps) {
               [1, 0],
             ]
           }
-
           const neighbors: number[] = []
           for (const [dr, dc] of dirs) {
             const nr = r + dr
@@ -422,7 +424,6 @@ export function PackBuilder({ onConfigChange, onNext }: PackBuilderProps) {
           cell.neighbors_same_layer = neighbors
         }
       }
-
       let xmin = Infinity,
         xmax = -Infinity,
         ymin = Infinity,
@@ -439,11 +440,9 @@ export function PackBuilder({ onConfigChange, onNext }: PackBuilderProps) {
         zmin = Math.min(zmin, cz - half_h)
         zmax = Math.max(zmax, cz + half_h)
       }
-
       const bbox = { xmin, xmax, ymin, ymax, zmin, zmax }
       const volume = (xmax - xmin) * (ymax - ymin) * (zmax - zmin)
       const weight = cells.length * mCell
-
       let constraintWarnings: string[] = []
       const parsedMaxVolume = parseFloat(maxVolume)
       const parsedMaxWeight = parseFloat(maxWeight)
@@ -453,16 +452,14 @@ export function PackBuilder({ onConfigChange, onNext }: PackBuilderProps) {
       if (!isNaN(parsedMaxWeight) && weight > parsedMaxWeight) {
         constraintWarnings.push(`Pack weight ${weight.toFixed(3)} kg exceeds maximum ${maxWeight} kg`)
       }
-      if (constraintWarnings.length > 0) {
+      if (!isPreview && constraintWarnings.length > 0) {
         alert('Design Constraint Warnings:\n' + constraintWarnings.join('\n'))
       }
-
       const meta = {
         bbox,
         layers: layerConfigs,
         formFactor,
       }
-
       return {
         cells,
         meta,
@@ -483,11 +480,10 @@ export function PackBuilder({ onConfigChange, onNext }: PackBuilderProps) {
         },
       }
     } catch (e: any) {
-      alert(e.message)
+      if (!isPreview) alert(e.message)
       return null
     }
   }
-
   const handleNextClick = () => {
     const config = validateAndGenerate()
     if (config) {
@@ -496,6 +492,12 @@ export function PackBuilder({ onConfigChange, onNext }: PackBuilderProps) {
       onNext()
     }
   }
+
+  // New useEffect for real-time preview updates
+  useEffect(() => {
+    const config = validateAndGenerate(true) // Preview mode: no alerts
+    setPreviewCells(config?.cells || [])
+  }, [formFactor, dims, layers, zPitch, allowOverlap, computeNeighbors, labelSchema])
 
   return (
     <div className="space-y-6">
@@ -520,7 +522,6 @@ export function PackBuilder({ onConfigChange, onNext }: PackBuilderProps) {
               </SelectContent>
             </Select>
           </div>
-
           {cellSelection === 'library' && (
             <div className="space-y-3">
               <Label>Select Cell</Label>
@@ -538,7 +539,6 @@ export function PackBuilder({ onConfigChange, onNext }: PackBuilderProps) {
               </Select>
             </div>
           )}
-
           <div className="space-y-3">
             <Label htmlFor="form-factor">Cell Form Factor</Label>
             <Select value={formFactor} onValueChange={(v) => setFormFactor(v as 'cylindrical' | 'prismatic')}>
@@ -551,78 +551,70 @@ export function PackBuilder({ onConfigChange, onNext }: PackBuilderProps) {
               </SelectContent>
             </Select>
           </div>
-
           <div className="grid grid-cols-2 gap-4">
             {formFactor === 'cylindrical' ? (
               <>
                 <div className="space-y-3">
                   <Label>Radius (mm)</Label>
-                  <Input type="number" value={dims.radius ?? ''} onChange={(e) => handleDimsChange('radius', e.target.value)} />
+                  <Input type="number" min="0" value={dims.radius ?? ''} onChange={(e) => handleDimsChange('radius', e.target.value)} />
                 </div>
                 <div className="space-y-3">
                   <Label>Height (mm)</Label>
-                  <Input type="number" value={dims.height ?? ''} onChange={(e) => handleDimsChange('height', e.target.value)} />
+                  <Input type="number" min="0" value={dims.height ?? ''} onChange={(e) => handleDimsChange('height', e.target.value)} />
                 </div>
               </>
             ) : (
               <>
                 <div className="space-y-3">
                   <Label>Length (mm)</Label>
-                  <Input type="number" value={dims.length ?? ''} onChange={(e) => handleDimsChange('length', e.target.value)} />
+                  <Input type="number" min="0" value={dims.length ?? ''} onChange={(e) => handleDimsChange('length', e.target.value)} />
                 </div>
                 <div className="space-y-3">
                   <Label>Width (mm)</Label>
-                  <Input type="number" value={dims.width ?? ''} onChange={(e) => handleDimsChange('width', e.target.value)} />
+                  <Input type="number" min="0" value={dims.width ?? ''} onChange={(e) => handleDimsChange('width', e.target.value)} />
                 </div>
                 <div className="space-y-3 col-span-2">
                   <Label>Height (mm)</Label>
-                  <Input type="number" value={dims.height ?? ''} onChange={(e) => handleDimsChange('height', e.target.value)} />
+                  <Input type="number" min="0" value={dims.height ?? ''} onChange={(e) => handleDimsChange('height', e.target.value)} />
                 </div>
               </>
             )}
           </div>
-
+          {/* New: Single Cell 3D Preview placed here, right after dimensions */}
+          <CellPreview3D formFactor={formFactor} dims={dims} />
           <div className="space-y-3">
             <Label>Capacity (Ah)</Label>
-            <Input type="number" value={capacity} onChange={(e) => setCapacity(parseFloat(e.target.value) || 0)} />
+            <Input type="number" min="0" value={capacity} onChange={(e) => setCapacity(parseFloat(e.target.value) || 0)} />
           </div>
-
           <div className="space-y-3">
             <Label>Columbic Efficiency</Label>
             <Input type="number" value={columbicEfficiency} onChange={(e) => setColumbicEfficiency(parseFloat(e.target.value) || 1.0)} />
           </div>
-
           <div className="space-y-3">
             <Label>Cell Mass (kg)</Label>
-            <Input type="number" value={mCell} onChange={(e) => setMCell(parseFloat(e.target.value) || 0)} />
+            <Input type="number" min="0" value={mCell} onChange={(e) => setMCell(parseFloat(e.target.value) || 0)} />
           </div>
-
           <div className="space-y-3">
             <Label>Jellyroll Mass (kg)</Label>
-            <Input type="number" value={mJellyroll} onChange={(e) => setMJellyroll(parseFloat(e.target.value) || 0)} />
+            <Input type="number" min="0" value={mJellyroll} onChange={(e) => setMJellyroll(parseFloat(e.target.value) || 0)} />
           </div>
-
           <div className="space-y-3">
             <Label>Cell Voltage Upper Limit (V)</Label>
             <Input type="number" value={cellUpperVoltage} onChange={(e) => setCellUpperVoltage(e.target.value)} />
           </div>
-
           <div className="space-y-3">
             <Label>Cell Voltage Lower Limit (V)</Label>
             <Input type="number" value={cellLowerVoltage} onChange={(e) => setCellLowerVoltage(e.target.value)} />
           </div>
-
           <div className="space-y-3">
             <Label>Custom Cell Name (for saving)</Label>
             <Input value={customName} onChange={(e) => setCustomName(e.target.value)} placeholder="Enter name to save" />
             <Button onClick={saveCustomCell}>Save Custom Cell</Button>
           </div>
-
           <div className="flex items-center space-x-2">
             <Checkbox id="allow-overlap" checked={allowOverlap} onCheckedChange={(checked) => setAllowOverlap(checked as boolean)} />
             <Label htmlFor="allow-overlap">Allow cell overlap (for testing only)</Label>
           </div>
-
           {useIndexPitch && (
             <div className="space-y-3">
               <Label>Z Pitch (mm)</Label>
@@ -632,7 +624,6 @@ export function PackBuilder({ onConfigChange, onNext }: PackBuilderProps) {
           )}
         </CardContent>
       </Card>
-
       <Card>
         <CardHeader>
           <CardTitle>Electrical Configuration</CardTitle>
@@ -650,29 +641,24 @@ export function PackBuilder({ onConfigChange, onNext }: PackBuilderProps) {
               </SelectContent>
             </Select>
           </div>
-
           <div className="space-y-3">
             <Label>R_p (Ohms) - Parallel Connection Resistance</Label>
             <Input type="number" value={rP} onChange={(e) => setRP(parseFloat(e.target.value) || 0)} />
           </div>
-
           <div className="space-y-3">
             <Label>R_s (Ohms) - Series Connection Resistance</Label>
             <Input type="number" value={rS} onChange={(e) => setRS(parseFloat(e.target.value) || 0)} />
           </div>
-
           <div className="space-y-3">
             <Label>Module Voltage Upper Limit (V)</Label>
             <Input type="number" value={moduleUpperVoltage} onChange={(e) => setModuleUpperVoltage(e.target.value)} />
           </div>
-
           <div className="space-y-3">
             <Label>Module Voltage Lower Limit (V)</Label>
             <Input type="number" value={moduleLowerVoltage} onChange={(e) => setModuleLowerVoltage(e.target.value)} />
           </div>
         </CardContent>
       </Card>
-
       <Card>
         <CardHeader>
           <CardTitle>Advanced Options</CardTitle>
@@ -682,14 +668,12 @@ export function PackBuilder({ onConfigChange, onNext }: PackBuilderProps) {
             <Checkbox id="compute-neighbors" checked={computeNeighbors} onCheckedChange={(checked) => setComputeNeighbors(checked as boolean)} />
             <Label htmlFor="compute-neighbors">Compute Neighbors</Label>
           </div>
-
           <div className="space-y-3">
             <Label>Label Schema</Label>
             <Input value={labelSchema} onChange={(e) => setLabelSchema(e.target.value)} placeholder="e.g. R{row}C{col}L{layer}" />
           </div>
         </CardContent>
       </Card>
-
       <Card>
         <CardHeader>
           <CardTitle>Design Constraints (Optional)</CardTitle>
@@ -699,14 +683,12 @@ export function PackBuilder({ onConfigChange, onNext }: PackBuilderProps) {
             <Label>Maximum Weight (kg)</Label>
             <Input type="number" value={maxWeight} onChange={(e) => setMaxWeight(e.target.value)} />
           </div>
-
           <div className="space-y-3">
             <Label>Maximum Volume (m³)</Label>
             <Input type="number" value={maxVolume} onChange={(e) => setMaxVolume(e.target.value)} />
           </div>
         </CardContent>
       </Card>
-
       <Card>
         <CardHeader>
           <div className="flex justify-between items-center">
@@ -735,7 +717,7 @@ export function PackBuilder({ onConfigChange, onNext }: PackBuilderProps) {
                     <SelectContent>
                       {gridTypes.map((gt) => (
                         <SelectItem key={gt} value={gt}>
-                          {gt}
+                          {gt.replace(/_/g, ' ')}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -750,11 +732,11 @@ export function PackBuilder({ onConfigChange, onNext }: PackBuilderProps) {
                   <Input type="number" value={layer.nCols} onChange={(e) => updateLayer(layer.id, 'nCols', e.target.value)} />
                 </div>
                 <div className="space-y-3">
-                  <Label>Pitch X (mm)</Label>
+                  <Label>Pitch X (mm)  [{getPitchXCondition(formFactor)}]</Label>
                   <Input type="number" value={layer.pitchX} onChange={(e) => updateLayer(layer.id, 'pitchX', e.target.value)} />
                 </div>
                 <div className="space-y-3">
-                  <Label>Pitch Y (mm)</Label>
+                  <Label>Pitch Y (mm) [{getPitchYCondition(formFactor)}]</Label>
                   <Input type="number" value={layer.pitchY} onChange={(e) => updateLayer(layer.id, 'pitchY', e.target.value)} />
                 </div>
                 <div className="space-y-3">
@@ -781,7 +763,15 @@ export function PackBuilder({ onConfigChange, onNext }: PackBuilderProps) {
           {layers.length === 0 && <p className="text-center text-muted-foreground">No layers added yet</p>}
         </CardContent>
       </Card>
-
+      {/* New: Full Pack 3D Preview placed here, after the Layers card */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Pack 3D Preview</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <PackLayout3D cells={previewCells} formFactor={formFactor} />
+        </CardContent>
+      </Card>
       {hasWarnings() && (
         <Alert>
           <AlertCircle className="h-4 w-4" />
@@ -790,12 +780,81 @@ export function PackBuilder({ onConfigChange, onNext }: PackBuilderProps) {
           </AlertDescription>
         </Alert>
       )}
-
       <div className="flex justify-end">
         <Button onClick={handleNextClick} disabled={layers.length === 0} className="min-w-32">
           Next: Define Drive Cycle
         </Button>
       </div>
+    </div>
+  )
+}
+
+// New Component: Single Cell 3D Preview
+function CellPreview3D({ formFactor, dims }: { formFactor: 'cylindrical' | 'prismatic', dims: { radius?: number; length?: number; width?: number; height: number } }) {
+  // Scale dimensions to meters for consistency (as in config)
+  const realHeight = (dims.height || 0) / 1000
+  let geometry
+  const rotation: [number, number, number] = formFactor === 'cylindrical' ? [0, 0, 0] : [Math.PI / 2, 0, 0]
+  if (formFactor === 'cylindrical') {
+    const realRadius = (dims.radius || 0) / 1000
+    geometry = <cylinderGeometry args={[realRadius, realRadius, realHeight, 32]} />
+  } else {
+    const realLength = (dims.length || 0) / 1000
+    const realWidth = (dims.width || 0) / 1000
+    geometry = <boxGeometry args={[realLength, realWidth, realHeight]} />
+  }
+
+  return (
+    <div className="w-full h-64 bg-gray-100 rounded-md overflow-hidden">
+      <Canvas>
+        <PerspectiveCamera makeDefault position={[0, 0, 0.5]} />
+        <ambientLight intensity={0.5} />
+        <pointLight position={[1, 1, 1]} />
+        <mesh position={[0, 0, 0]} rotation={[Math.PI / 2, 0, 0]}>
+          {geometry}
+          <meshStandardMaterial color="steelblue" />
+        </mesh>
+        <OrbitControls />
+      </Canvas>
+    </div>
+  )
+}
+
+// New Component: Full Pack Layout 3D Preview
+function PackLayout3D({ cells, formFactor }: { cells: any[], formFactor: 'cylindrical' | 'prismatic' }) {
+  if (!cells.length) {
+    return <p className="text-center text-muted-foreground">No valid pack configuration yet. Adjust parameters to preview.</p>
+  }
+
+  return (
+    <div className="w-full h-96 bg-gray-100 rounded-md overflow-hidden">
+      <Canvas>
+        <PerspectiveCamera makeDefault position={[0.5, 0.5, 0.5]} />
+        <ambientLight intensity={0.5} />
+        <pointLight position={[1, 1, 1]} />
+        {cells.map((cell) => {
+          const pos = cell.position
+          const dims = cell.dims
+          let geometry
+          const rotation: [number, number, number] = formFactor === 'cylindrical' ? [0, 0, 0] : [Math.PI / 2, 0, 0]
+          if (formFactor === 'cylindrical') {
+            geometry = <cylinderGeometry args={[dims.radius, dims.radius, dims.height, 32]} />
+          } else {
+            geometry = <boxGeometry args={[dims.length, dims.width, dims.height]} />
+          }
+          return (
+            <mesh
+              key={cell.global_index}
+              position={[pos[0], pos[2], pos[1]]} // Remap: x, z (up as y), y (as z depth)
+              rotation={rotation}
+            >
+              {geometry}
+              <meshStandardMaterial color="steelblue" />
+            </mesh>
+          )
+        })}
+        <OrbitControls />
+      </Canvas>
     </div>
   )
 }
