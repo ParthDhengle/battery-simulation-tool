@@ -189,15 +189,68 @@ export function PackBuilder({ onConfigChange, onNext }: PackBuilderProps) {
     const minPitchX = getMinPitchX(formFactor, dims);
     const minPitchY = getMinPitchY(formFactor, dims);
 
-    setLayers([...layers, { id: nextId, gridType: 'rectangular', nRows: 3, nCols: 3, pitchX: minPitchX+2, pitchY: minPitchY+2, zMode: 'explicit', zCenter: '1' }])
+    const lastLayer = layers[layers.length - 1];
+    const baseZ = lastLayer ? Number(lastLayer.zCenter) || 0 : 0;
+    const height = lastLayer ? dims.height+5 || 0 : 0;
+
+    setLayers([...layers, { id: nextId, gridType: 'rectangular', nRows: 3, nCols: 3, pitchX: minPitchX+2, pitchY: minPitchY+2, zMode: 'explicit', zCenter: (baseZ + height).toString() }])
     setNextId(nextId + 1)
   }
   const removeLayer = (id: number) => {
-    setLayers(layers.filter((l) => l.id !== id))
+    const removedIdx = layers.findIndex(l => l.id === id);
+    if (removedIdx === -1) return;
+    const removedLayer = layers[removedIdx];
+    let newLayers = layers.filter((l) => l.id !== id);
+    let shiftAmount = 0;
+    const pitch = parseFloat(zPitch) || 0;
+    let prevZ = 0;
+    if (removedIdx > 0) {
+      const prevLayer = layers[removedIdx - 1];
+      if (prevLayer.zMode === 'explicit') {
+        prevZ = parseFloat(prevLayer.zCenter) || 0;
+      } else {
+        prevZ = (removedIdx - 1) * pitch;
+      }
+    }
+    if (removedLayer.zMode === 'explicit') {
+      const removedZ = parseFloat(removedLayer.zCenter) || 0;
+      shiftAmount = removedZ - prevZ;
+    } else {
+      shiftAmount = pitch;
+    }
+    newLayers = newLayers.map((layer, newIdx) => {
+      if (newIdx >= removedIdx && layer.zMode === 'explicit') {
+        const currentZ = parseFloat(layer.zCenter) || 0;
+        const newZ = currentZ - shiftAmount;
+        return { ...layer, zCenter: newZ.toString() };
+      }
+      return layer;
+    });
+    setLayers(newLayers);
   }
   const updateLayer = (id: number, field: keyof Layer, value: string) => {
-    setLayers(layers.map((l) => (l.id === id ? { ...l, [field]: value } : l)))
-  }
+    setLayers(prevLayers =>
+      prevLayers.map((l, idx) => {
+        if (l.id !== id) return l;
+
+        let updated = { ...l, [field]: value };
+
+        // 👉 Enforce Z Center stacking
+        if (field === "zCenter") {
+          const prevLayer = prevLayers[idx - 1];
+          if (prevLayer) {
+            const minZ = Number(prevLayer.zCenter) || 0;
+            if (Number(value) <= minZ) {
+              // force it above the previous layer
+              updated.zCenter = (minZ + getMinPitchY(formFactor, dims)).toString();
+            }
+          }
+        }
+
+        return updated;
+      })
+    );
+  };
   const handleDimsChange = (field: string, value: string) => {
     const num = parseFloat(value)
     if (num < 0) return;
