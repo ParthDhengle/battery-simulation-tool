@@ -151,8 +151,8 @@ export function ResultsDashboard({ results, onPrevious }: ResultsDashboardProps)
                     <Area
                       type="monotone"
                       dataKey="soc"
-                      stroke="hsl(var(--chart-1))"
-                      fill="hsl(var(--chart-1))"
+                      stroke="var(--chart-1)"
+                      fill="var(--chart-1)"
                       fillOpacity={0.3}
                     />
                   </AreaChart>
@@ -171,7 +171,7 @@ export function ResultsDashboard({ results, onPrevious }: ResultsDashboardProps)
                       formatter={(value: any) => [`${value.toFixed(1)}V`, "Voltage"]}
                       labelFormatter={(value: any) => `Time: ${value.toFixed(1)} min`}
                     />
-                    <Line type="monotone" dataKey="voltage" stroke="var(--chart-2)" strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="voltage" stroke="var(--chart-3)" strokeWidth={2} dot={false} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -208,7 +208,7 @@ export function ResultsDashboard({ results, onPrevious }: ResultsDashboardProps)
                     <Line
                       type="monotone"
                       dataKey="temperature"
-                      stroke="var(--chart-4))"
+                      stroke="var(--chart-4)"
                       strokeWidth={2}
                       dot={false}
                     />
@@ -231,8 +231,8 @@ export function ResultsDashboard({ results, onPrevious }: ResultsDashboardProps)
                     <Area
                       type="monotone"
                       dataKey="power"
-                      stroke="hsl(var(--chart-5))"
-                      fill="hsl(var(--chart-5))"
+                      stroke="var(--chart-5)"
+                      fill="var(--chart-5)"
                       fillOpacity={0.3}
                     />
                   </AreaChart>

@@ -13,9 +13,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { AlertCircle, TrendingUp, Thermometer } from "lucide-react"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 
 interface SubCycleStep {
-  value: string
+  value: number
   isDynamic: boolean
   unit: "A" | "C" | "W" | "V"
   duration: number
@@ -71,11 +72,9 @@ interface DriveCycleBuilderProps {
 export function DriveCycleBuilder({ onConfigChange, onNext, onPrevious }: DriveCycleBuilderProps) {
   const [configMethod, setConfigMethod] = useState("manual")
   const [subCycles, setSubCycles] = useState<SubCycle[]>([])
-  const [currentSubCycleId, setCurrentSubCycleId] = useState("")
   const [currentSubCycleName, setCurrentSubCycleName] = useState("")
   const [currentSubCycleSteps, setCurrentSubCycleSteps] = useState<SubCycleStep[]>([])
   const [driveCycles, setDriveCycles] = useState<DriveCycle[]>([])
-  const [currentDriveCycleId, setCurrentDriveCycleId] = useState("")
   const [currentDriveCycleName, setCurrentDriveCycleName] = useState("")
   const [currentDriveCycleSegments, setCurrentDriveCycleSegments] = useState<DriveCycleSegment[]>([])
   const [calendarRules, setCalendarRules] = useState<CalendarRule[]>([])
@@ -87,7 +86,25 @@ export function DriveCycleBuilder({ onConfigChange, onNext, onPrevious }: DriveC
   const [startingSoc, setStartingSoc] = useState("80")
   const [error, setError] = useState("")
   const [savedConfigs, setSavedConfigs] = useState<NamedConfig[]>([])
-
+  const [currentStep, setCurrentStep] = useState(1) // 1: Sub-Cycle, 2: Drive Cycle, 3: Calendar
+  const [open, setOpen] = useState(false)
+  const [currentSubCycleId, setCurrentSubCycleId] = useState("SC-001")
+  const [currentDriveCycleId, setCurrentDriveCycleId] = useState("DC-001")
+  const months = [
+    { num: 1, label: "Jan" },
+    { num: 2, label: "Feb" },
+    { num: 3, label: "Mar" },
+    { num: 4, label: "Apr" },
+    { num: 5, label: "May" },
+    { num: 6, label: "Jun" },
+    { num: 7, label: "Jul" },
+    { num: 8, label: "Aug" },
+    { num: 9, label: "Sep" },
+    { num: 10, label: "Oct" },
+    { num: 11, label: "Nov" },
+    { num: 12, label: "Dec" },
+  ]
+  
   const predefinedConfigs: NamedConfig[] = [
     {
       name: "Idle Cycle",
@@ -97,7 +114,7 @@ export function DriveCycleBuilder({ onConfigChange, onNext, onPrevious }: DriveC
             id: "IDLE",
             name: "Idle",
             steps: [
-              { value: "0", isDynamic: false, unit: "A", duration: 86400, repetitions: 1 }
+              { value: 0, isDynamic: false, unit: "A", duration: 86400, repetitions: 1 }
             ]
           }
         ],
@@ -123,14 +140,14 @@ export function DriveCycleBuilder({ onConfigChange, onNext, onPrevious }: DriveC
             id: "DRIVE",
             name: "Driving",
             steps: [
-              { value: "-10", isDynamic: false, unit: "A", duration: 3600, repetitions: 1 }
+              { value: -10, isDynamic: false, unit: "A", duration: 3600, repetitions: 1 }
             ]
           },
           {
             id: "CHARGE",
             name: "Charging",
             steps: [
-              { value: "5", isDynamic: false, unit: "A", duration: 7200, repetitions: 1 }
+              { value: 5, isDynamic: false, unit: "A", duration: 7200, repetitions: 1 }
             ]
           }
         ],
@@ -171,14 +188,14 @@ export function DriveCycleBuilder({ onConfigChange, onNext, onPrevious }: DriveC
             id: "LONG_DRIVE",
             name: "Long Driving",
             steps: [
-              { value: "-15", isDynamic: false, unit: "A", duration: 10800, repetitions: 1 }
+              { value: -15, isDynamic: false, unit: "A", duration: 10800, repetitions: 1 }
             ]
           },
           {
             id: "FAST_CHARGE",
             name: "Fast Charging",
             steps: [
-              { value: "10", isDynamic: false, unit: "A", duration: 3600, repetitions: 1 }
+              { value: 10, isDynamic: false, unit: "A", duration: 3600, repetitions: 1 }
             ]
           }
         ],
@@ -231,13 +248,15 @@ export function DriveCycleBuilder({ onConfigChange, onNext, onPrevious }: DriveC
     setStartingSoc(config.startingSoc.toString())
     setError("")
     setConfigMethod("manual") // Switch to manual after loading
+    resetSubCycleForm()
+    resetDriveCycleForm()
   }
 
   // Sub-Cycle Handlers
   const addSubCycleStep = () => {
     setCurrentSubCycleSteps([
       ...currentSubCycleSteps,
-      { value: "", isDynamic: false, unit: "A", duration: 0, repetitions: 1 },
+      { value: 0, isDynamic: false, unit: "A", duration: 0, repetitions: 1 },
     ])
   }
 
@@ -251,18 +270,60 @@ export function DriveCycleBuilder({ onConfigChange, onNext, onPrevious }: DriveC
     setCurrentSubCycleSteps(currentSubCycleSteps.filter((_, i) => i !== index))
   }
 
+  const generateSubCycleId = (subCycles: SubCycle[]) => {
+    let maxNum = 0;
+    subCycles.forEach(({ id }) => {
+      const match = id.match(/^SC-(\d{3})$/);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (num > maxNum) maxNum = num;
+      }
+    });
+    return `SC-${String(maxNum + 2).padStart(3, "0")}`;
+  }
+
+  const generateDriveCycleId = (driveCycles: DriveCycle[]) => {
+    let maxNum = 0;
+    driveCycles.forEach(({ id }) => {
+      const match = id.match(/^DC-(\d{3})$/);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (num > maxNum) maxNum = num;
+      }
+    });
+    return `DC-${String(maxNum + 2).padStart(3, "0")}`;
+  }
+
   const saveSubCycle = () => {
-    if (!currentSubCycleId || !currentSubCycleName || currentSubCycleSteps.length === 0) {
+    let newId = currentSubCycleId
+
+    if (!newId) {
+      newId = generateSubCycleId(subCycles)
+      setCurrentSubCycleId(newId)
+    }
+
+    if (!newId || !currentSubCycleName || currentSubCycleSteps.length === 0) {
       setError("Sub-cycle ID, name, and at least one step are required")
       return
     }
-    if (subCycles.some((sc) => sc.id === currentSubCycleId)) {
-      setSubCycles(subCycles.map((sc) => (sc.id === currentSubCycleId ? { id: currentSubCycleId, name: currentSubCycleName, steps: currentSubCycleSteps } : sc)))
+
+    if (subCycles.some((sc) => sc.id === newId)) {
+      setSubCycles(
+        subCycles.map((sc) =>
+          sc.id === newId
+            ? { id: newId, name: currentSubCycleName, steps: currentSubCycleSteps }
+            : sc
+        )
+      )
     } else {
-      setSubCycles([...subCycles, { id: currentSubCycleId, name: currentSubCycleName, steps: currentSubCycleSteps }])
+      setSubCycles([
+        ...subCycles,
+        { id: newId, name: currentSubCycleName, steps: currentSubCycleSteps },
+      ])
     }
     resetSubCycleForm()
   }
+
 
   const loadSubCycle = (id: string) => {
     const sc = subCycles.find((sc) => sc.id === id)
@@ -274,9 +335,10 @@ export function DriveCycleBuilder({ onConfigChange, onNext, onPrevious }: DriveC
   }
 
   const resetSubCycleForm = () => {
-    setCurrentSubCycleId("")
+    setCurrentSubCycleId(generateSubCycleId(subCycles))
     setCurrentSubCycleName("")
     setCurrentSubCycleSteps([])
+    setError("")
   }
 
   // Drive Cycle Handlers
@@ -298,14 +360,19 @@ export function DriveCycleBuilder({ onConfigChange, onNext, onPrevious }: DriveC
   }
 
   const saveDriveCycle = () => {
-    if (!currentDriveCycleId || !currentDriveCycleName || currentDriveCycleSegments.length === 0) {
+    let newId = currentDriveCycleId
+    if (!newId) {
+      newId = generateDriveCycleId(driveCycles)
+      setCurrentDriveCycleId(newId)
+    }
+    if (!newId || !currentDriveCycleName || currentDriveCycleSegments.length === 0) {
       setError("Drive cycle ID, name, and at least one segment are required")
       return
     }
-    if (driveCycles.some((dc) => dc.id === currentDriveCycleId)) {
-      setDriveCycles(driveCycles.map((dc) => (dc.id === currentDriveCycleId ? { id: currentDriveCycleId, name: currentDriveCycleName, segments: currentDriveCycleSegments } : dc)))
+    if (driveCycles.some((dc) => dc.id === newId)) {
+      setDriveCycles(driveCycles.map((dc) => (dc.id === newId ? { id: newId, name: currentDriveCycleName, segments: currentDriveCycleSegments } : dc)))
     } else {
-      setDriveCycles([...driveCycles, { id: currentDriveCycleId, name: currentDriveCycleName, segments: currentDriveCycleSegments }])
+      setDriveCycles([...driveCycles, { id: newId, name: currentDriveCycleName, segments: currentDriveCycleSegments }])
     }
     resetDriveCycleForm()
   }
@@ -320,7 +387,7 @@ export function DriveCycleBuilder({ onConfigChange, onNext, onPrevious }: DriveC
   }
 
   const resetDriveCycleForm = () => {
-    setCurrentDriveCycleId("")
+    setCurrentDriveCycleId(generateDriveCycleId(driveCycles))
     setCurrentDriveCycleName("")
     setCurrentDriveCycleSegments([])
   }
@@ -462,252 +529,266 @@ export function DriveCycleBuilder({ onConfigChange, onNext, onPrevious }: DriveC
             </TabsContent>
 
             <TabsContent value="manual" className="mt-6">
-              <Tabs defaultValue="subcycle">
-                <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="subcycle">1. Sub-Cycles</TabsTrigger>
-                  <TabsTrigger value="drivecycle">2. Drive Cycles</TabsTrigger>
-                  <TabsTrigger value="calendar">3. Calendar Assignment</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="subcycle" className="mt-6 space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="subcycle-id">Sub-Cycle ID</Label>
-                      <Input id="subcycle-id" value={currentSubCycleId} onChange={(e) => setCurrentSubCycleId(e.target.value)} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="subcycle-name">Name</Label>
-                      <Input id="subcycle-name" value={currentSubCycleName} onChange={(e) => setCurrentSubCycleName(e.target.value)} />
-                    </div>
-                  </div>
-                  <Button onClick={addSubCycleStep}>Add Step</Button>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Value</TableHead>
-                        <TableHead>Dynamic?</TableHead>
-                        <TableHead>Unit</TableHead>
-                        <TableHead>Duration (s)</TableHead>
-                        <TableHead>Trigger Condition</TableHead>
-                        <TableHead>Repetitions</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {currentSubCycleSteps.map((step, index) => (
-                        <TableRow key={index}  className="bg-muted/40 hover:bg-muted/70">
-                          <TableCell>
-                            <Input className="bg-white border border-gray-200" value={step.value} onChange={(e) => updateSubCycleStep(index, "value", e.target.value)} />
-                          </TableCell>
-                          <TableCell>
-                            <Checkbox className="bg-white border border-gray-200" checked={step.isDynamic} onCheckedChange={(checked) => updateSubCycleStep(index, "isDynamic", checked)} />
-                          </TableCell>
-                          <TableCell>
-                            <Select value={step.unit} onValueChange={(value: "A" | "C" | "W" | "V") => updateSubCycleStep(index, "unit", value)}>
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent >
-                                <SelectItem value="A">A (Current)</SelectItem>
-                                <SelectItem value="C">C-rate</SelectItem>
-                                <SelectItem value="W">W (Power)</SelectItem>
-                                <SelectItem value="V">V (Voltage)</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </TableCell>
-                          <TableCell>
-                            <Input className="bg-white border border-gray-200" type="number" value={step.duration} onChange={(e) => updateSubCycleStep(index, "duration", Number.parseFloat(e.target.value))} />
-                          </TableCell>
-                          <TableCell>
-                            <Input className="bg-white border border-gray-200" value={step.triggerCondition || ""} onChange={(e) => updateSubCycleStep(index, "triggerCondition", e.target.value)} />
-                          </TableCell>
-                          <TableCell>
-                            <Input className="bg-white border border-gray-200"   type="number" value={step.repetitions} onChange={(e) => updateSubCycleStep(index, "repetitions", Number.parseInt(e.target.value))} />
-                          </TableCell>
-                          <TableCell>
-                            <Button variant="destructive" onClick={() => removeSubCycleStep(index)}>Remove</Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                  <Button onClick={saveSubCycle}>Save to Library</Button>
-                  <div className="space-y-2">
-                    <Label>Load Existing Sub-Cycle</Label>
-                    <Select onValueChange={loadSubCycle}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select sub-cycle" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {subCycles.map((sc) => (
-                          <SelectItem key={sc.id} value={sc.id}>
-                            {sc.name} ({sc.id})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="drivecycle" className="mt-6 space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="drivecycle-id">Drive Cycle ID</Label>
-                      <Input id="drivecycle-id" value={currentDriveCycleId} onChange={(e) => setCurrentDriveCycleId(e.target.value)} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="drivecycle-name">Name</Label>
-                      <Input id="drivecycle-name" value={currentDriveCycleName} onChange={(e) => setCurrentDriveCycleName(e.target.value)} />
-                    </div>
-                  </div>
-                  <Button onClick={addDriveCycleSegment}>Add Segment</Button>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Sub-Cycle ID</TableHead>
-                        <TableHead>Repetitions</TableHead>
-                        <TableHead>Ambient Temp (°C)</TableHead>
-                        <TableHead>Trigger Condition</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {currentDriveCycleSegments.map((segment, index) => (
-                        <TableRow key={index}>
-                          <TableCell>
-                            <Select value={segment.subCycleId} onValueChange={(value) => updateDriveCycleSegment(index, "subCycleId", value)}>
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {subCycles.map((sc) => (
-                                  <SelectItem key={sc.id} value={sc.id}>
-                                    {sc.name} ({sc.id})
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </TableCell>
-                          <TableCell>
-                            <Input type="number" value={segment.repetitions} onChange={(e) => updateDriveCycleSegment(index, "repetitions", Number.parseInt(e.target.value))} />
-                          </TableCell>
-                          <TableCell>
-                            <Input type="number" value={segment.ambientTemp} onChange={(e) => updateDriveCycleSegment(index, "ambientTemp", Number.parseFloat(e.target.value))} />
-                          </TableCell>
-                          <TableCell>
-                            <Input value={segment.triggerCondition || ""} onChange={(e) => updateDriveCycleSegment(index, "triggerCondition", e.target.value)} />
-                          </TableCell>
-                          <TableCell>
-                            <Button variant="destructive" onClick={() => removeDriveCycleSegment(index)}>Remove</Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                  <Button onClick={saveDriveCycle}>Save to Library</Button>
-                  <div className="space-y-2">
-                    <Label>Load Existing Drive Cycle</Label>
-                    <Select onValueChange={loadDriveCycle}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select drive cycle" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {driveCycles.map((dc) => (
-                          <SelectItem key={dc.id} value={dc.id}>
-                            {dc.name} ({dc.id})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="calendar" className="mt-6 space-y-4">
+              <div className="space-y-6">
+                {currentStep === 1 && (
                   <div className="space-y-4">
-                    <div className="grid grid-cols-4 gap-4">
+                    <h2 className="text-xl font-bold">1. Sub-Cycle Builder</h2>
+                    <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label>Months (comma-separated)</Label>
-                        <Input value={newRuleMonths} onChange={(e) => setNewRuleMonths(e.target.value)} placeholder="1,2,3" />
+                        <Label htmlFor="subcycle-id">Sub-Cycle ID</Label>
+                        <Input id="subcycle-id" value={currentSubCycleId} onChange={(e) => setCurrentSubCycleId(e.target.value)} />
                       </div>
                       <div className="space-y-2">
-                        <Label>Filter Type</Label>
-                        <Select value={newRuleFilterType} onValueChange={(value: "weekday" | "date") => setNewRuleFilterType(value)}>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="weekday">Weekday</SelectItem>
-                            <SelectItem value="date">Date</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Days/Dates (comma-separated)</Label>
-                        <Input value={newRuleDaysOrDates} onChange={(e) => setNewRuleDaysOrDates(e.target.value)} placeholder="Mon,Tue or 1,15,30" />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Drive Cycle ID</Label>
-                        <Select value={newRuleDriveCycleId} onValueChange={setNewRuleDriveCycleId}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select DC" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {driveCycles.map((dc) => (
-                              <SelectItem key={dc.id} value={dc.id}>
-                                {dc.name} ({dc.id})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <Label htmlFor="subcycle-name">Name</Label>
+                        <Input id="subcycle-name" value={currentSubCycleName} onChange={(e) => setCurrentSubCycleName(e.target.value)} />
                       </div>
                     </div>
-                    <Button onClick={addCalendarRule}>Add Rule</Button>
-                  </div>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Months</TableHead>
-                        <TableHead>Filter Type</TableHead>
-                        <TableHead>Days/Dates</TableHead>
-                        <TableHead>Drive Cycle ID</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {calendarRules.map((rule, index) => (
-                        <TableRow key={index}>
-                          <TableCell>{rule.months}</TableCell>
-                          <TableCell>{rule.filterType}</TableCell>
-                          <TableCell>{rule.daysOrDates}</TableCell>
-                          <TableCell>{rule.driveCycleId}</TableCell>
-                          <TableCell>
-                            <Button variant="destructive" onClick={() => removeCalendarRule(index)}>Remove</Button>
-                          </TableCell>
+                    <Button onClick={addSubCycleStep}>Add Step</Button>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Value</TableHead>
+                          <TableHead>Dynamic?</TableHead>
+                          <TableHead>Unit</TableHead>
+                          <TableHead>Duration (s)</TableHead>
+                          <TableHead>Trigger Condition</TableHead>
+                          <TableHead>Repetitions</TableHead>
+                          <TableHead>Actions</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                  <div className="space-y-2">
-                    <Label>Default Drive Cycle ID (for unmatched days)</Label>
-                    <Select value={defaultDriveCycleId} onValueChange={setDefaultDriveCycleId}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select default DC (e.g., DC_IDLE)" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {driveCycles.map((dc) => (
-                          <SelectItem key={dc.id} value={dc.id}>
-                            {dc.name} ({dc.id})
-                          </SelectItem>
+                      </TableHeader>
+                      <TableBody>
+                        {currentSubCycleSteps.map((step, index) => (
+                          <TableRow key={index} className="bg-muted/40 hover:bg-muted/70">
+                            <TableCell>
+                              <Input className="bg-white border border-gray-200" value={step.value} onChange={(e) => updateSubCycleStep(index, "value", e.target.value)} />
+                            </TableCell>
+                            <TableCell>
+                              <Checkbox className="bg-white border border-gray-200" checked={step.isDynamic} onCheckedChange={(checked) => updateSubCycleStep(index, "isDynamic", checked)} />
+                            </TableCell>
+                            <TableCell>
+                              <Select value={step.unit} onValueChange={(value: "A" | "C" | "W" | "V") => updateSubCycleStep(index, "unit", value)}>
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="A">A (Current)</SelectItem>
+                                  <SelectItem value="C">C-rate</SelectItem>
+                                  <SelectItem value="W">W (Power)</SelectItem>
+                                  <SelectItem value="V">V (Voltage)</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </TableCell>
+                            <TableCell>
+                              <Input className="bg-white border border-gray-200" type="number" min="0" value={step.duration} onChange={(e) => updateSubCycleStep(index, "duration", Number.parseFloat(e.target.value))} />
+                            </TableCell>
+                            <TableCell>
+                              <Input className="bg-white border border-gray-200" value={step.triggerCondition || ""} onChange={(e) => updateSubCycleStep(index, "triggerCondition", e.target.value)} />
+                            </TableCell>
+                            <TableCell>
+                              <Input className="bg-white border border-gray-200" type="number" min="0" value={step.repetitions} onChange={(e) => updateSubCycleStep(index, "repetitions", Number.parseInt(e.target.value))} />
+                            </TableCell>
+                            <TableCell>
+                              <Button variant="destructive" onClick={() => removeSubCycleStep(index)}>Remove</Button>
+                            </TableCell>
+                          </TableRow>
                         ))}
-                      </SelectContent>
-                    </Select>
+                      </TableBody>
+                    </Table>
+                    <Button onClick={saveSubCycle}>Save to Library</Button>
+                    <div className="space-y-2">
+                      <Label>Load Existing Sub-Cycle</Label>
+                      <Select onValueChange={loadSubCycle}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select sub-cycle" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {subCycles.map((sc) => (
+                            <SelectItem key={sc.id} value={sc.id}>
+                              {sc.name} ({sc.id})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex justify-end">
+                      <Button onClick={() => setCurrentStep(2)}>Next: Drive Cycle Builder</Button>
+                    </div>
                   </div>
-                </TabsContent>
-              </Tabs>
-              <div className="flex justify-end space-x-4 mt-6">
-                <Button onClick={handleSave}>Save Config</Button>
-                <Button onClick={handleDownload}>Download JSON</Button>
+                )}
+
+                {currentStep === 2 && (
+                  <div className="space-y-4">
+                    <h2 className="text-xl font-bold">2. Drive Cycle Builder</h2>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="drivecycle-id">Drive Cycle ID</Label>
+                        <Input id="drivecycle-id" value={currentDriveCycleId} onChange={(e) => setCurrentDriveCycleId(e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="drivecycle-name">Name</Label>
+                        <Input id="drivecycle-name" value={currentDriveCycleName} onChange={(e) => setCurrentDriveCycleName(e.target.value)} />
+                      </div>
+                    </div>
+                    <Button onClick={addDriveCycleSegment}>Add Segment</Button>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Sub-Cycle ID</TableHead>
+                          <TableHead>Repetitions</TableHead>
+                          <TableHead>Ambient Temp (°C)</TableHead>
+                          <TableHead>Trigger Condition</TableHead>
+                          <TableHead>Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {currentDriveCycleSegments.map((segment, index) => (
+                          <TableRow key={index}>
+                            <TableCell>
+                              <Select value={segment.subCycleId} onValueChange={(value) => updateDriveCycleSegment(index, "subCycleId", value)}>
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {subCycles.map((sc) => (
+                                    <SelectItem key={sc.id} value={sc.id}>
+                                      {sc.name} ({sc.id})
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </TableCell>
+                            <TableCell>
+                              <Input type="number" value={segment.repetitions} onChange={(e) => updateDriveCycleSegment(index, "repetitions", Number.parseInt(e.target.value))} />
+                            </TableCell>
+                            <TableCell>
+                              <Input type="number" value={segment.ambientTemp} onChange={(e) => updateDriveCycleSegment(index, "ambientTemp", Number.parseFloat(e.target.value))} />
+                            </TableCell>
+                            <TableCell>
+                              <Input value={segment.triggerCondition || ""} onChange={(e) => updateDriveCycleSegment(index, "triggerCondition", e.target.value)} />
+                            </TableCell>
+                            <TableCell>
+                              <Button variant="destructive" onClick={() => removeDriveCycleSegment(index)}>Remove</Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                    <Button onClick={saveDriveCycle}>Save to Library</Button>
+                    <div className="space-y-2">
+                      <Label>Load Existing Drive Cycle</Label>
+                      <Select onValueChange={loadDriveCycle}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select drive cycle" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {driveCycles.map((dc) => (
+                            <SelectItem key={dc.id} value={dc.id}>
+                              {dc.name} ({dc.id})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex justify-between">
+                      <Button variant="outline" onClick={() => setCurrentStep(1)}>Back</Button>
+                      <Button onClick={() => setCurrentStep(3)}>Next: Calendar Assignment</Button>
+                    </div>
+                  </div>
+                )}
+
+                {currentStep === 3 && (
+                  <div className="space-y-4">
+                    <h2 className="text-xl font-bold">3. Calendar Assignment</h2>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-4 gap-4">
+                        <div className="space-y-2">
+                          <Label>Months (comma-separated)</Label>
+                          <Input value={newRuleMonths} onChange={(e) => setNewRuleMonths(e.target.value)} placeholder="1,2,3" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Filter Type</Label>
+                          <Select value={newRuleFilterType} onValueChange={(value: "weekday" | "date") => setNewRuleFilterType(value)}>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="weekday">Weekday</SelectItem>
+                              <SelectItem value="date">Date</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Days/Dates (comma-separated)</Label>
+                          <Input value={newRuleDaysOrDates} onChange={(e) => setNewRuleDaysOrDates(e.target.value)} placeholder="Mon,Tue or 1,15,30" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Drive Cycle ID</Label>
+                          <Select value={newRuleDriveCycleId} onValueChange={setNewRuleDriveCycleId}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select DC" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {driveCycles.map((dc) => (
+                                <SelectItem key={dc.id} value={dc.id}>
+                                  {dc.name} ({dc.id})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <Button onClick={addCalendarRule}>Add Rule</Button>
+                    </div>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Months</TableHead>
+                          <TableHead>Filter Type</TableHead>
+                          <TableHead>Days/Dates</TableHead>
+                          <TableHead>Drive Cycle ID</TableHead>
+                          <TableHead>Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {calendarRules.map((rule, index) => (
+                          <TableRow key={index}>
+                            <TableCell>{rule.months}</TableCell>
+                            <TableCell>{rule.filterType}</TableCell>
+                            <TableCell>{rule.daysOrDates}</TableCell>
+                            <TableCell>{rule.driveCycleId}</TableCell>
+                            <TableCell>
+                              <Button variant="destructive" onClick={() => removeCalendarRule(index)}>Remove</Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                    <div className="space-y-2">
+                      <Label>Default Drive Cycle ID (for unmatched days)</Label>
+                      <Select value={defaultDriveCycleId} onValueChange={setDefaultDriveCycleId}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select default DC (e.g., DC_IDLE)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {driveCycles.map((dc) => (
+                            <SelectItem key={dc.id} value={dc.id}>
+                              {dc.name} ({dc.id})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex justify-between">
+                      <Button variant="outline" onClick={() => setCurrentStep(2)}>Back</Button>
+                      <div className="flex space-x-4">
+                        <Button onClick={handleSave}>Save Config</Button>
+                        <Button onClick={handleDownload}>Download JSON</Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
+              
             </TabsContent>
           </Tabs>
         </CardContent>
