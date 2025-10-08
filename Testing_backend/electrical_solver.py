@@ -1,4 +1,6 @@
+# Updated and optimized electrical_solver.py with HDF5 chunking
 import numpy as np
+import h5py
 from battery_params import get_battery_params
 from next_soc import calculate_next_soc
 from parallel_group_currents import calculate_parallel_group_currents
@@ -38,29 +40,37 @@ def run_electrical_solver(setup_data):
     sim_V_C1 = np.zeros(N_cells)
     sim_V_C2 = np.zeros(N_cells)
 
+    # History dict for in-memory temp storage; will write to HDF5 in chunks
     history = {
-        'Vterm': np.zeros((N_cells, time_steps)),
-        'SOC': np.zeros((N_cells, time_steps)),
-        'OCV': np.zeros((N_cells, time_steps)),
-        'Qgen': np.zeros((N_cells, time_steps)),
-        'Qirrev': np.zeros((N_cells, time_steps)),
-        'Qrev': np.zeros((N_cells, time_steps)),
-        'dt': np.zeros(time_steps),
-        'V_RC1': np.zeros((N_cells, time_steps)),
-        'V_RC2': np.zeros((N_cells, time_steps)),
-        'V_R0': np.zeros((N_cells, time_steps)),
-        'V_R1': np.zeros((N_cells, time_steps)),
-        'V_R2': np.zeros((N_cells, time_steps)),
-        'V_C1': np.zeros((N_cells, time_steps)),
-        'V_C2': np.zeros((N_cells, time_steps)),
-        'energy_throughput': np.zeros((N_cells, time_steps)),
-        'Qgen_cumulative': np.zeros((N_cells, time_steps)),
+        'Vterm': np.zeros((N_cells, time_steps), dtype='float32'),
+        'SOC': np.zeros((N_cells, time_steps), dtype='float32'),
+        'OCV': np.zeros((N_cells, time_steps), dtype='float32'),
+        'Qgen': np.zeros((N_cells, time_steps), dtype='float32'),
+        'Qirrev': np.zeros((N_cells, time_steps), dtype='float32'),
+        'Qrev': np.zeros((N_cells, time_steps), dtype='float32'),
+        'dt': np.zeros(time_steps, dtype='float32'),
+        'V_RC1': np.zeros((N_cells, time_steps), dtype='float32'),
+        'V_RC2': np.zeros((N_cells, time_steps), dtype='float32'),
+        'V_R0': np.zeros((N_cells, time_steps), dtype='float32'),
+        'V_R1': np.zeros((N_cells, time_steps), dtype='float32'),
+        'V_R2': np.zeros((N_cells, time_steps), dtype='float32'),
+        'V_C1': np.zeros((N_cells, time_steps), dtype='float32'),
+        'V_C2': np.zeros((N_cells, time_steps), dtype='float32'),
+        'energy_throughput': np.zeros((N_cells, time_steps), dtype='float32'),
+        'Qgen_cumulative': np.zeros((N_cells, time_steps), dtype='float32'),
     }
 
-    I_cells_matrix = np.zeros((N_cells, time_steps))
-    V_parallel_matrix = np.zeros((N_cells, time_steps))
-    V_terminal_module_matrix = np.zeros(time_steps)
+    I_cells_matrix = np.zeros((N_cells, time_steps), dtype='float32')
+    V_parallel_matrix = np.zeros((N_cells, time_steps), dtype='float32')
+    V_terminal_module_matrix = np.zeros(time_steps, dtype='float32')
 
+    # Create HDF5 file and pre-allocate
+    h5_path = 'simulation_results.h5'
+    with h5py.File(h5_path, 'w') as f:
+        for key, arr in history.items():
+            f.create_dataset(key, shape=arr.shape, dtype='float32', compression='gzip', chunks=True)
+
+    chunk_size = 1000  # Adjust based on memory
     for t in range(time_steps - 1):
         dt = time[t + 1] - time[t]
         history['dt'][t] = dt
@@ -125,7 +135,11 @@ def run_electrical_solver(setup_data):
 
                 if Vterm > cell_voltage_upper_limit or (not np.isnan(cell_voltage_lower_limit) and Vterm < cell_voltage_lower_limit):
                     print(f"Simulation stopped: Cell {cell_idx} terminal voltage cutoff at step {t}, V = {Vterm:.4f} V")
-                    return history
+                    # Save current state before return
+                    with h5py.File(h5_path, 'a') as f:
+                        for key in history:
+                            f[key][:] = history[key][:]
+                    return h5_path
 
                 next_SOC = calculate_next_soc(I_cell, dt, capacity, sim_SOC[cell_idx],
                                               coulombic_efficiency, sim_SOH[cell_idx])
@@ -167,4 +181,20 @@ def run_electrical_solver(setup_data):
             cells, V_parallel_matrix, I_module, R_s, t, V_terminal_module_matrix
         )
 
-    return history
+        # Chunk save
+        if t % chunk_size == 0 and t > 0:
+            start = t - chunk_size + 1
+            end = t + 1
+            with h5py.File(h5_path, 'a') as f:
+                for key in history:
+                    if history[key].ndim == 2:
+                        f[key][:, start:end] = history[key][:, start:end]
+                    else:
+                        f[key][start:end] = history[key][start:end]
+
+    # Final save
+    with h5py.File(h5_path, 'a') as f:
+        for key in history:
+            f[key][:] = history[key][:]
+
+    return h5_path

@@ -1,3 +1,4 @@
+# Updated and optimized data_processor.py
 import json
 import numpy as np
 from datetime import datetime, timedelta
@@ -79,7 +80,7 @@ def create_setup_from_json(pack_json_path, drive_json_path, sim_json_path):
         'BatteryData_SOH3': BatteryData_SOH3
     }
 
-def flatten_drive_cycle(drive_config, start_date_str='2025-01-01', num_days=365, nominal_V=3.7, capacity=5.0):
+def flatten_drive_cycle(drive_config, start_date_str='2025-01-01', num_days=365, nominal_V=3.7, capacity=5.0, dynamic_dt=1.0):
     start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
     
     sub_cycles = {sc['id']: sc for sc in drive_config['subCycles']}
@@ -107,13 +108,13 @@ def flatten_drive_cycle(drive_config, start_date_str='2025-01-01', num_days=365,
             if month not in months:
                 continue
             
-            days_or_dates = [d.strip().lower().capitalize() for d in rule['daysOrDates'].split(',')]  # 'mon' -> 'Mon'
+            days_or_dates = [d.strip().lower().capitalize() for d in rule['daysOrDates'].split(',')]  
             if rule['filterType'] == 'weekday':
                 if weekday in days_or_dates:
                     matching_dc_id = rule['driveCycleId'].strip()
                     break
             elif rule['filterType'] == 'date':
-                dates = [int(d) for d in days_or_dates]
+                dates = [int(d) for d in days_or_dates if d.isdigit()]  # Handle non-digits
                 if date_day in dates:
                     matching_dc_id = rule['driveCycleId'].strip()
                     break
@@ -132,13 +133,15 @@ def flatten_drive_cycle(drive_config, start_date_str='2025-01-01', num_days=365,
                     unit = step['unit']
                     value = float(step['value'])
                     duration = step['duration']
-                    if duration == 0:
+                    repetitions = step.get('repetitions', 1)
+                    total_duration = duration * repetitions
+                    if total_duration == 0:
                         continue
                     
                     if unit == 'A':
                         I = value
                     elif unit == 'W':
-                        I = value / nominal_V  # Approx
+                        I = value / nominal_V  
                     elif unit == 'C':
                         I = value * capacity
                     elif unit == 'V':
@@ -148,8 +151,21 @@ def flatten_drive_cycle(drive_config, start_date_str='2025-01-01', num_days=365,
                         print(f"Warning: Unknown unit {unit}, skipping.")
                         continue
                     
-                    for _ in range(int(duration)):
-                        global_time += 1.0
+                    if step['isDynamic']:
+                        # Expand dynamic steps to small dt
+                        num_small_steps = int(total_duration / dynamic_dt)
+                        for _ in range(num_small_steps):
+                            global_time += dynamic_dt
+                            time_arr.append(global_time)
+                            current_arr.append(I)  # Assuming constant I; can add variation if needed
+                        remainder = total_duration % dynamic_dt
+                        if remainder > 0:
+                            global_time += remainder
+                            time_arr.append(global_time)
+                            current_arr.append(I)
+                    else:
+                        # Collapse non-dynamic to single step
+                        global_time += total_duration
                         time_arr.append(global_time)
                         current_arr.append(I)
     
