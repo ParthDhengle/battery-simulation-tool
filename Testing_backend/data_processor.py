@@ -1,11 +1,4 @@
-# Modified data_processor.py
-# Changes:
-# - Restored dynamic splitting to honor the isDynamic flag from frontend input.
-# - To prevent excessive time steps and make simulation feasible, set dynamic_dt=60.0 (1-minute intervals for dynamic steps).
-#   This still splits dynamic steps into small intervals but reduces total steps from ~1.7M to ~31K, making runtime reasonable (~1-2 minutes).
-#   If higher resolution is needed, reduce dt (e.g., 10.0 for ~180K steps), but 60s is sufficient for constant currents.
-# - Suppressed repeated warnings by printing them only once per unique message.
-
+# Testing_backend/data_processor.py
 import json
 import numpy as np
 from datetime import datetime, timedelta
@@ -14,7 +7,6 @@ from classify_cells import init_classify_cells
 from initial_conditions import init_initial_cell_conditions
 from busbar_connections import define_busbar_connections
 from battery_params import BatteryData_SOH1, BatteryData_SOH2, BatteryData_SOH3
-
 def create_setup_from_json(pack_json_path, drive_json_path, sim_json_path):
     with open(pack_json_path, 'r') as f:
         pack = json.load(f)
@@ -79,39 +71,38 @@ def create_setup_from_json(pack_json_path, drive_json_path, sim_json_path):
         'BatteryData_SOH2': BatteryData_SOH2,
         'BatteryData_SOH3': BatteryData_SOH3
     }
-
 def flatten_drive_cycle(drive_config, start_date_str='2025-01-01', num_days=365, nominal_V=3.7, capacity=5.0, dynamic_dt=60.0):
     start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
-   
+  
     sub_cycles = {sc['id']: sc for sc in drive_config['subCycles']}
     drive_cycles = {dc['id']: dc for dc in drive_config['driveCycles']}
-   
+  
     rules = drive_config['calendarRules']
-   
+  
     default_dc_id = drive_config['defaultDriveCycleId']
     if not default_dc_id or default_dc_id not in drive_cycles:
         default_dc_id = list(drive_cycles.keys())[0]
-   
+  
     global_time = 0.0
     time_arr = [0.0]
     current_arr = [0.0]
-   
-    warned_skipped_v = False  # Flag to warn only once
+  
+    warned_skipped_v = False # Flag to warn only once
     warned_unknown_unit = False
-   
+  
     for day in range(num_days):
         current_date = start_date + timedelta(days=day)
         month = current_date.month
         weekday = current_date.strftime('%a').capitalize() # 'Mon'
         date_day = current_date.day
         day_start_time = global_time # Track start of day
-       
+      
         matching_dc_id = default_dc_id
         for rule in rules:
             months = [int(m) for m in rule['months'].split(',')]
             if month not in months:
                 continue
-           
+          
             days_or_dates = [d.strip().lower().capitalize() for d in rule['daysOrDates'].split(',')]
             if rule['filterType'] == 'weekday':
                 if weekday in days_or_dates:
@@ -122,12 +113,12 @@ def flatten_drive_cycle(drive_config, start_date_str='2025-01-01', num_days=365,
                 if date_day in dates:
                     matching_dc_id = rule['driveCycleId'].strip()
                     break
-       
+      
         dc = drive_cycles.get(matching_dc_id)
         if not dc:
             print(f"Warning: No DC for day {current_date}, skipping.")
             continue
-       
+      
         for segment in dc['segments']:
             sub = sub_cycles.get(segment['subCycleId'])
             if not sub:
@@ -141,7 +132,7 @@ def flatten_drive_cycle(drive_config, start_date_str='2025-01-01', num_days=365,
                     total_duration = duration * repetitions
                     if total_duration == 0:
                         continue
-                   
+                  
                     if unit == 'A':
                         I = value
                     elif unit == 'W':
@@ -158,7 +149,7 @@ def flatten_drive_cycle(drive_config, start_date_str='2025-01-01', num_days=365,
                             print(f"Warning: Unknown unit {unit}, skipping. This warning will not repeat.")
                             warned_unknown_unit = True
                         continue
-                   
+                  
                     if step['isDynamic']:
                         # Expand dynamic steps to small dt
                         num_small_steps = int(total_duration / dynamic_dt)
@@ -176,7 +167,7 @@ def flatten_drive_cycle(drive_config, start_date_str='2025-01-01', num_days=365,
                         global_time += total_duration
                         time_arr.append(global_time)
                         current_arr.append(I)
-       
+      
         # Add idle time to end of day (86400 seconds)
         day_end_time = day_start_time + 86400
         idle_duration = day_end_time - global_time
@@ -184,5 +175,5 @@ def flatten_drive_cycle(drive_config, start_date_str='2025-01-01', num_days=365,
             global_time += idle_duration
             time_arr.append(global_time)
             current_arr.append(0.0)
-           
+          
     return np.array(time_arr), np.array(current_arr)
