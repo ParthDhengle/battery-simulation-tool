@@ -150,8 +150,15 @@ export function SimulationSetup({ onConfigChange, onNext, onPrevious }: Simulati
       estimatedComputeTime: getEstimatedComputeTime(),
       complexityLevel: getComplexityLevel().level,
     }
-    onConfigChange(config)
-    onNext()
+    if (config) {
+      console.log('Generated model configuration:', config);
+      onConfigChange(config)
+      onNext()
+    }
+    else{
+      console.error('Failed to generate model configuration.');
+    }
+    
   }
 
   const complexity = getComplexityLevel()

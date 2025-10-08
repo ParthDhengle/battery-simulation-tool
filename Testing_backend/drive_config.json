@@ -1,0 +1,272 @@
+{
+  "subCycles": [
+    {
+      "id": "SC-001",
+      "name": "morning",
+      "steps": [
+        {
+          "value": "22",
+          "isDynamic": false,
+          "unit": "A",
+          "duration": 300,
+          "repetitions": 1
+        },
+        {
+          "value": "23",
+          "isDynamic": false,
+          "unit": "A",
+          "duration": 400,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "id": "SC-002",
+      "name": "After noon cycle",
+      "steps": [
+        {
+          "value": "22",
+          "isDynamic": true,
+          "unit": "A",
+          "duration": 900,
+          "repetitions": 2
+        },
+        {
+          "value": "23",
+          "isDynamic": false,
+          "unit": "A",
+          "duration": 1800,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "id": "SC-003",
+      "name": "evening",
+      "steps": [
+        {
+          "value": "34",
+          "isDynamic": true,
+          "unit": "A",
+          "duration": 900,
+          "repetitions": 1
+        },
+        {
+          "value": "44",
+          "isDynamic": true,
+          "unit": "A",
+          "duration": 1200,
+          "repetitions": 1
+        },
+        {
+          "value": "23",
+          "isDynamic": false,
+          "unit": "W",
+          "duration": 300,
+          "repetitions": 1
+        },
+        {
+          "value": "60",
+          "isDynamic": false,
+          "unit": "C",
+          "duration": 1800,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "id": "SC-005",
+      "name": "after noon weekend",
+      "steps": [
+        {
+          "value": "22",
+          "isDynamic": false,
+          "unit": "A",
+          "duration": 300,
+          "repetitions": 1
+        },
+        {
+          "value": "23",
+          "isDynamic": false,
+          "unit": "W",
+          "duration": 900,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "id": "SC-004",
+      "name": "morning",
+      "steps": [
+        {
+          "value": "22",
+          "isDynamic": false,
+          "unit": "A",
+          "duration": 300,
+          "repetitions": 1
+        },
+        {
+          "value": "23",
+          "isDynamic": false,
+          "unit": "A",
+          "duration": 400,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "id": "SC-006",
+      "name": "Weekend evening",
+      "steps": [
+        {
+          "value": "43",
+          "isDynamic": false,
+          "unit": "A",
+          "duration": 200,
+          "repetitions": 1
+        },
+        {
+          "value": "66",
+          "isDynamic": false,
+          "unit": "V",
+          "duration": 1800,
+          "repetitions": 2
+        },
+        {
+          "value": "42",
+          "isDynamic": false,
+          "unit": "W",
+          "duration": 900,
+          "repetitions": 1
+        }
+      ]
+    },
+    {
+      "id": "SC-007",
+      "name": "Vacation morning",
+      "steps": [
+        {
+          "value": "67",
+          "isDynamic": false,
+          "unit": "W",
+          "duration": 3600,
+          "repetitions": 2
+        }
+      ]
+    },
+    {
+      "id": "SC-008",
+      "name": "vacation afternoon",
+      "steps": [
+        {
+          "value": "23",
+          "isDynamic": false,
+          "unit": "A",
+          "duration": 0,
+          "repetitions": 2
+        },
+        {
+          "value": "55",
+          "isDynamic": false,
+          "unit": "V",
+          "duration": 0,
+          "repetitions": 1
+        }
+      ]
+    }
+  ],
+  "driveCycles": [
+    {
+      "id": "DC-001 ",
+      "name": "working days",
+      "segments": [
+        {
+          "subCycleId": "SC-001",
+          "repetitions": 1,
+          "ambientTemp": 25
+        },
+        {
+          "subCycleId": "SC-002",
+          "repetitions": 1,
+          "ambientTemp": 40
+        },
+        {
+          "subCycleId": "SC-003",
+          "repetitions": 2,
+          "ambientTemp": 25
+        }
+      ]
+    },
+    {
+      "id": "DC-002",
+      "name": "weekends",
+      "segments": [
+        {
+          "subCycleId": "SC-004",
+          "repetitions": 1,
+          "ambientTemp": 29
+        },
+        {
+          "subCycleId": "SC-005",
+          "repetitions": 1,
+          "ambientTemp": 42
+        },
+        {
+          "subCycleId": "SC-006",
+          "repetitions": 1,
+          "ambientTemp": 25
+        }
+      ]
+    },
+    {
+      "id": "DC-003",
+      "name": "vacation",
+      "segments": [
+        {
+          "subCycleId": "SC-007",
+          "repetitions": 1,
+          "ambientTemp": 28
+        },
+        {
+          "subCycleId": "SC-008",
+          "repetitions": 1,
+          "ambientTemp": 39
+        }
+      ]
+    }
+  ],
+  "calendarRules": [
+    {
+      "months": "1,2,3,5,6,9,10,11",
+      "filterType": "weekday",
+      "daysOrDates": "mon,tue,wed,thu,fri",
+      "driveCycleId": "DC-001 "
+    },
+    {
+      "months": "1,2,3,5,6,9,10,11",
+      "filterType": "weekday",
+      "daysOrDates": "sat,sun",
+      "driveCycleId": "DC-002"
+    },
+    {
+      "months": "4",
+      "filterType": "date",
+      "daysOrDates": "1,2,13,14",
+      "driveCycleId": "DC-003"
+    },
+    {
+      "months": "7",
+      "filterType": "date",
+      "daysOrDates": "3,4,5,29,30",
+      "driveCycleId": "DC-003"
+    },
+    {
+      "months": "8,12",
+      "filterType": "weekday",
+      "daysOrDates": "1,2,3,30",
+      "driveCycleId": "DC-003"
+    }
+  ],
+  "defaultDriveCycleId": "",
+  "startingSoc": 80
+}

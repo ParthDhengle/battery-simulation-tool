@@ -37,7 +37,7 @@ export function PackBuilder({ onConfigChange, onNext }: PackBuilderProps) {
     | {
         name: string;
         formFactor: 'prismatic';
-        dims: { length: number; width: number; height: number; radius?: never };
+        dims: { length: number; width: number; height: number; radius?: number };
         capacity: number;
         columbic_efficiency: number;
         m_cell: number;
