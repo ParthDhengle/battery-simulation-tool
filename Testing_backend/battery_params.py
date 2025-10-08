@@ -56,13 +56,12 @@ def get_battery_params(SOC, cell_temp_C, mode, SOH, DCIR_aging_factor, BatteryDa
     def make_interp(grid):
         return RegularGridInterpolator((SOC_grid, Temp_grid), grid, bounds_error=False, fill_value=None)
 
-    OCV = make_interp(parameter_grids[0])((SOC, cell_temp_C))[0]
-    R0 = make_interp(parameter_grids[1])((SOC, cell_temp_C))[0]
-    R1 = make_interp(parameter_grids[2])((SOC, cell_temp_C))[0]
-    R2 = make_interp(parameter_grids[3])((SOC, cell_temp_C))[0]
-    C1 = make_interp(parameter_grids[4])((SOC, cell_temp_C))[0]
-    C2 = make_interp(parameter_grids[5])((SOC, cell_temp_C))[0]
-
+    OCV = make_interp(parameter_grids[0])((SOC, cell_temp_C))
+    R0 = make_interp(parameter_grids[1])((SOC, cell_temp_C))
+    R1 = make_interp(parameter_grids[2])((SOC, cell_temp_C))
+    R2 = make_interp(parameter_grids[3])((SOC, cell_temp_C))
+    C1 = make_interp(parameter_grids[4])((SOC, cell_temp_C))
+    C2 = make_interp(parameter_grids[5])((SOC, cell_temp_C))
     # Apply aging
     R0 *= DCIR_aging_factor
     R1 *= DCIR_aging_factor
