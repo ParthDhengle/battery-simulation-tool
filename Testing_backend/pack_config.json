@@ -519,7 +519,7 @@
     "R_s": 0.001,
     "voltage_limits": {
         "cell_upper": 4.2,
-        "cell_lower": 2.5,
+        "cell_lower": null,
         "module_upper": 60,
         "module_lower": null
     },

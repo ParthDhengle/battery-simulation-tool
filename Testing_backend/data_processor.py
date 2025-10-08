@@ -101,6 +101,7 @@ def flatten_drive_cycle(drive_config, start_date_str='2025-01-01', num_days=365,
         month = current_date.month
         weekday = current_date.strftime('%a').capitalize()  # 'Mon'
         date_day = current_date.day
+        day_start_time = global_time  # Track start of day
         
         matching_dc_id = default_dc_id
         for rule in rules:
@@ -168,5 +169,13 @@ def flatten_drive_cycle(drive_config, start_date_str='2025-01-01', num_days=365,
                         global_time += total_duration
                         time_arr.append(global_time)
                         current_arr.append(I)
-    
+        
+        # Add idle time to end of day (86400 seconds)
+        day_end_time = day_start_time + 86400
+        idle_duration = day_end_time - global_time
+        if idle_duration > 0:
+            global_time += idle_duration
+            time_arr.append(global_time)
+            current_arr.append(0.0)
+            
     return np.array(time_arr), np.array(current_arr)

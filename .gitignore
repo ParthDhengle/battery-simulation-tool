@@ -27,3 +27,5 @@ yarn-error.log*
 next-env.d.ts
 
 /Python Scripts
+
+simulation_results.h5
